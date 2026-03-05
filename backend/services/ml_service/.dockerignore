@@ -1,0 +1,55 @@
+# Python
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.so
+*.egg
+*.egg-info
+dist
+build
+.venv
+venv/
+ENV/
+
+# IDEs
+.vscode
+.idea
+*.swp
+*.swo
+
+# Git
+.git
+.gitignore
+
+# Environment
+.env
+.env.local
+
+# Tests
+tests/
+*.test.py
+.pytest_cache
+
+# Documentation
+*.md
+!README.md
+
+# Logs
+*.log
+
+# Model files (don't include in build)
+*.pth
+*.pt
+*.bin
+*.onnx
+models/
+
+# Jupyter
+*.ipynb
+.ipynb_checkpoints
+
+# Data
+data/
+datasets/

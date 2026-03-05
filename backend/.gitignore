@@ -1,0 +1,52 @@
+# Environment variables
+.env
+.env.local
+.env.*.local
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+ENV/
+.venv
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Docker
+*.log
+
+# Database
+*.db
+*.sqlite3
+
+# MinIO object storage data
+minio_data/
+dicom_received/
+
+# ML Service datasets
+services/ml_service/datasets/
+services/ml_service/models/*.pth
+services/ml_service/models/*.pt
+
+# Image files (except examples)
+*.jpg
+*.jpeg
+*.png
+*.bmp
+*.tiff
+*.tif
+*.dcm
+!example*.jpg
+!example*.png
+# OS
+.DS_Store
+Thumbs.db

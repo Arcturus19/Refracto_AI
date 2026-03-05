@@ -1,0 +1,40 @@
+# FastAPI and ASGI server
+fastapi==0.109.0
+uvicorn[standard]==0.27.0
+pydantic==2.5.3
+pydantic-settings==2.1.0
+
+# File Upload
+python-multipart==0.0.6
+
+# Deep Learning Frameworks
+# CPU-only build — avoids downloading 2GB+ of NVIDIA CUDA libraries in Docker
+# For GPU support, change to: pip install torch torchvision --index-url https://download.pytorch.org/whl/cu121
+torch==2.1.2+cpu
+torchvision==0.16.2+cpu
+--extra-index-url https://download.pytorch.org/whl/cpu
+
+# Pre-trained Models
+timm==0.9.12  # EfficientNet and other vision models
+transformers==4.37.2  # Vision Transformer (ViT)
+
+# Image Processing
+pillow==10.2.0
+numpy==1.26.3
+opencv-python-headless==4.9.0.80
+
+# Explainability and Visualization
+grad-cam==1.4.8  # For generating visual explanations (CAM, Grad-CAM)
+shap==0.44.1  # For SHAP values and model explanations
+matplotlib==3.8.2  # For plotting and saving heatmap images
+
+# Medical Imaging (optional, for DICOM support in future)
+
+# pydicom==2.4.4
+
+# Utilities
+python-dotenv==1.0.0
+requests==2.31.0
+
+# Development
+tqdm==4.66.1  # Progress bars for model downloads

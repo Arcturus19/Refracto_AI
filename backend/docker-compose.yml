@@ -1,0 +1,175 @@
+version: '3.8'
+
+services:
+  # PostgreSQL Database Service
+  postgres:
+    image: postgres:15
+    container_name: refracto_postgres
+    restart: always
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - refracto_network
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U ${POSTGRES_USER}" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # pgAdmin Service for Database Management
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: refracto_pgadmin
+    restart: always
+    environment:
+      PGADMIN_DEFAULT_EMAIL: ${PGADMIN_DEFAULT_EMAIL}
+      PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_DEFAULT_PASSWORD}
+    ports:
+      - "5050:80"
+    volumes:
+      - pgadmin_data:/var/lib/pgadmin
+    networks:
+      - refracto_network
+    depends_on:
+      - postgres
+
+  # Auth Service (FastAPI)
+  auth_service:
+    build:
+      context: ./services/auth_service
+      dockerfile: Dockerfile
+    container_name: refracto_auth_service
+    restart: always
+    environment:
+      DATABASE_URL: ${DATABASE_URL}
+      SECRET_KEY: ${SECRET_KEY}
+      ALGORITHM: ${ALGORITHM}
+      ACCESS_TOKEN_EXPIRE_MINUTES: ${ACCESS_TOKEN_EXPIRE_MINUTES}
+    ports:
+      - "8001:8000"
+    networks:
+      - refracto_network
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  # Patient Service (FastAPI)
+  patient_service:
+    build:
+      context: ./services/patient_service
+      dockerfile: Dockerfile
+    container_name: refracto_patient_service
+    restart: always
+    environment:
+      DATABASE_URL: ${DATABASE_URL}
+    ports:
+      - "8002:8000"
+    networks:
+      - refracto_network
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  # MinIO Object Storage Service
+  minio:
+    image: minio/minio
+    container_name: refracto_minio
+    restart: always
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: admin
+      MINIO_ROOT_PASSWORD: password123
+    ports:
+      - "9000:9000" # API
+      - "9001:9001" # Console UI
+    volumes:
+      - ./minio_data:/data
+    networks:
+      - refracto_network
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:9000/minio/health/live" ]
+      interval: 30s
+      timeout: 20s
+      retries: 3
+
+  # Imaging Service (FastAPI)
+  imaging_service:
+    build:
+      context: ./services/imaging_service
+      dockerfile: Dockerfile
+    container_name: refracto_imaging_service
+    restart: always
+    environment:
+      DATABASE_URL: ${DATABASE_URL}
+      MINIO_ENDPOINT: minio:9000
+      MINIO_ROOT_USER: admin
+      MINIO_ROOT_PASSWORD: password123
+      MINIO_SECURE: "false"
+    ports:
+      - "8003:8000"
+    networks:
+      - refracto_network
+    depends_on:
+      postgres:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+
+  # ML Service (FastAPI + PyTorch)
+  ml_service:
+    build:
+      context: ./services/ml_service
+      dockerfile: Dockerfile
+    container_name: refracto_ml_service
+    restart: always
+    environment:
+      MODEL_PATH: /app/models
+      DEVICE: cpu # Change to 'cuda' if GPU available
+    ports:
+      - "8004:8000"
+    volumes:
+      - ./models:/app/models # Mount models directory for persistence
+      - ./data:/data # Mount data directory for training datasets
+    networks:
+      - refracto_network
+    # Note: ML service can run independently, no service dependencies
+
+    # DICOM Service (Background Worker)
+  dicom_service:
+    build:
+      context: ./services/dicom_service
+      dockerfile: Dockerfile
+    container_name: refracto_dicom_service
+    restart: always
+    environment:
+      PATIENT_SERVICE_URL: http://patient_service:8000
+      IMAGING_SERVICE_URL: http://imaging_service:8000
+      AUTO_INGEST: "true"
+      AUTO_CREATE_PATIENTS: "true"
+      DELETE_AFTER_UPLOAD: "true"
+    ports:
+      - "11112:11112" # DICOM C-STORE port
+    volumes:
+      - ./dicom_received:/tmp/dicom_received # Persistent DICOM storage
+    networks:
+      - refracto_network
+    depends_on:
+      - patient_service
+      - imaging_service
+    # Note: DICOM service runs independently as background worker
+
+volumes:
+  postgres_data:
+    driver: local
+  pgadmin_data:
+    driver: local
+
+networks:
+  refracto_network:
+    driver: bridge

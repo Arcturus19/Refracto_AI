@@ -1,0 +1,13 @@
+# DICOM Processing
+pynetdicom==2.0.2     # DICOM network protocol
+pydicom==2.4.4        # DICOM file handling
+
+# HTTP Requests (for forwarding to other services)
+requests==2.31.0
+
+# Image Processing (optional, for DICOM to standard image conversion)
+pillow==10.2.0
+numpy==1.26.3
+
+# Utilities
+python-dotenv==1.0.0

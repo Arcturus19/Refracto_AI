@@ -1,0 +1,25 @@
+# Python
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.so
+*.egg
+*.egg-info
+
+# IDEs
+.vscode
+.idea
+*.swp
+
+# Git
+.git
+.gitignore
+
+# Environment
+.env
+
+# DICOM files
+*.dcm
+/tmp/

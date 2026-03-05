@@ -1,0 +1,24 @@
+# FastAPI and ASGI server
+fastapi==0.109.0
+uvicorn[standard]==0.27.0
+pydantic==2.5.3
+pydantic-settings==2.1.0
+
+# Database
+sqlalchemy==2.0.25
+psycopg2-binary==2.9.9
+
+# File Upload
+python-multipart==0.0.6
+
+# Object Storage
+minio==7.2.3
+
+# Medical Imaging
+pydicom==2.4.4
+
+# Environment & Configuration
+python-dotenv==1.0.0
+
+# Date utilities
+python-dateutil==2.8.2

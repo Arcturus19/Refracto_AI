@@ -5,19 +5,24 @@ import {
   XAIInfoBanner,
   ExplanationPanel,
   ConfidenceBreakdown,
+  Card,
+  CardHeader,
+  CardTitle,
+  CardDescription,
+  CardContent,
 } from './ExplanationComponents';
 
 interface MTLPredictionResult {
   prediction_id: string;
   dr_prediction: number;
-  glaucoma_prediction: float;
-  refraction_sphere: float;
-  refraction_cylinder: float;
-  refraction_axis: float;
-  dr_confidence: float;
-  glaucoma_confidence: float;
-  refraction_confidence: float;
-  dr_classes: Record<string, float>;
+  glaucoma_prediction: number;
+  refraction_sphere: number;
+  refraction_cylinder: number;
+  refraction_axis: number;
+  dr_confidence: number;
+  glaucoma_confidence: number;
+  refraction_confidence: number;
+  dr_classes: Record<string, number>;
 }
 
 /**
@@ -45,10 +50,9 @@ export const MTLResultsPanelWithXAI: React.FC<{
     setLoading(true);
     try {
       let endpoint = '';
-      let payload = {
+      let payload: Record<string, unknown> = {
         prediction_id: results.prediction_id,
         confidence: 0,
-        class_probabilities: undefined,
       };
 
       if (selectedTask === 'dr') {

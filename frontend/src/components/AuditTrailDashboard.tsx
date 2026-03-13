@@ -25,6 +25,8 @@ interface AuditTrailDashboardProps {
   patientHash?: string;
   dateRange?: { start: string; end: string };
   onExportCompliance?: () => void;
+  showPIIWarning?: boolean;
+  itemsPerPage?: number;
 }
 
 /**
@@ -41,19 +43,33 @@ interface AuditTrailDashboardProps {
 export const AuditTrailDashboard: React.FC<AuditTrailDashboardProps> = ({
   patientHash,
   dateRange,
-  onExportCompliance
+  onExportCompliance,
+  showPIIWarning = false,
+  itemsPerPage: _itemsPerPage,
 }) => {
   const [logs, setLogs] = useState<AuditLogEntry[]>([]);
   const [loading, setLoading] = useState(false);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [filterTask, setFilterTask] = useState<'All' | 'DR' | 'Glaucoma' | 'Refraction'>('All');
+  const [error, setError] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [currentPage, setCurrentPage] = useState(1);
+  const [exportFormat, setExportFormat] = useState<'csv' | 'json'>('csv');
+  const itemsPerPage = _itemsPerPage ?? 20;
 
   useEffect(() => {
     fetchAuditLogs();
-  }, [patientHash, dateRange]);
+  }, [patientHash, dateRange, filterTask]);
+
+  useEffect(() => {
+    if (searchQuery) {
+      fetchAuditLogs();
+    }
+  }, [searchQuery]);
 
   const fetchAuditLogs = async () => {
     setLoading(true);
+    setError(null);
     try {
       const params = new URLSearchParams();
       if (patientHash) params.append('patient_hash', patientHash);
@@ -61,14 +77,18 @@ export const AuditTrailDashboard: React.FC<AuditTrailDashboardProps> = ({
         params.append('start_date', dateRange.start);
         params.append('end_date', dateRange.end);
       }
+      if (filterTask !== 'All') params.append('task', filterTask);
+      if (searchQuery) params.append('q', searchQuery);
 
-      const response = await fetch(`/api/audit/logs?${params}`);
+      const response = await fetch(`/api/ml/audit/logs?${params}`, { headers: { 'Content-Type': 'application/json' } });
       if (response.ok) {
         const data = await response.json();
         setLogs(data.logs || []);
+      } else {
+        setError('Failed to load audit logs');
       }
-    } catch (error) {
-      console.error('Failed to fetch audit logs:', error);
+    } catch {
+      setError('Error loading audit logs');
     } finally {
       setLoading(false);
     }
@@ -76,10 +96,10 @@ export const AuditTrailDashboard: React.FC<AuditTrailDashboardProps> = ({
 
   const handleExport = async () => {
     try {
-      const response = await fetch('/api/audit/export/compliance', {
+      const response = await fetch('/api/ml/audit/export', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ patient_hash: patientHash })
+        body: JSON.stringify({ patient_hash: patientHash, format: exportFormat })
       });
 
       if (response.ok) {
@@ -87,17 +107,20 @@ export const AuditTrailDashboard: React.FC<AuditTrailDashboardProps> = ({
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
-        a.download = `audit_export_${new Date().toISOString()}.csv`;
+        a.download = `audit_export_${new Date().toISOString()}.${exportFormat}`;
         a.click();
       }
-    } catch (error) {
-      alert('Export failed');
+    } catch {
+      setError('Export failed');
     }
   };
 
   const filteredLogs = filterTask === 'All' 
     ? logs 
     : logs.filter(log => log.task === filterTask);
+
+  const totalPages = Math.ceil(filteredLogs.length / itemsPerPage);
+  const pagedLogs = filteredLogs.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
 
   const taskColors = {
     'DR': 'bg-yellow-50 border-yellow-200',
@@ -128,43 +151,88 @@ export const AuditTrailDashboard: React.FC<AuditTrailDashboardProps> = ({
         </div>
       </div>
 
+      {/* PII Warning */}
+      {showPIIWarning && (
+        <div className="p-3 bg-yellow-50 border border-yellow-300 rounded text-sm text-yellow-800">
+          All data shown is anonymized — no PII is stored or displayed.
+        </div>
+      )}
+
+      {/* Search */}
+      <div>
+        <input
+          type="text"
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          placeholder="Search by patient hash or date..."
+          className="w-full p-2 border border-gray-300 rounded focus:outline-none focus:border-blue-500 text-sm"
+        />
+      </div>
+
       {/* Controls */}
-      <div className="flex flex-col sm:flex-row gap-4">
-        <div className="flex gap-2 flex-wrap">
-          {(['All', 'DR', 'Glaucoma', 'Refraction'] as const).map(task => (
+      <div className="flex flex-col sm:flex-row gap-4 items-center">
+        <div className="flex gap-2 flex-wrap items-center">
+          <button
+            aria-label="All Tasks"
+            onClick={() => setFilterTask('All')}
+            className={`px-3 py-1 rounded text-sm font-medium transition ${
+              filterTask === 'All' ? 'bg-blue-600 text-white' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+            }`}
+          >
+            All
+          </button>
+          {(['DR', 'Glaucoma', 'Refraction'] as const).map(task => (
             <button
               key={task}
-              onClick={() => setFilterTask(task)}
-              className={`px-3 py-1 rounded text-sm font-medium transition ${
+              aria-label={task}
+              onClick={() => { setFilterTask(task); setCurrentPage(1); }}
+              className={`w-8 h-8 rounded-full font-bold text-xs transition ${
                 filterTask === task
-                  ? 'bg-blue-600 text-white'
-                  : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
-              }`}
-            >
-              {task}
-            </button>
+                  ? 'ring-2 ring-offset-1 ring-blue-500 opacity-100'
+                  : 'opacity-70 hover:opacity-100'
+              } ${task === 'DR' ? 'bg-yellow-400' : task === 'Glaucoma' ? 'bg-red-400' : 'bg-purple-400'}`}
+              title={task === 'DR' ? 'Diabetic Retinopathy' : task}
+            />
           ))}
         </div>
-        <button
-          onClick={handleExport}
-          className="ml-auto flex items-center gap-2 px-4 py-1 bg-green-600 text-white rounded hover:bg-green-700 font-medium transition"
-        >
-          <Download size={16} />
-          Export (Compliance)
-        </button>
+
+        <div className="ml-auto flex items-center gap-2">
+          <select
+            value={exportFormat}
+            onChange={(e) => setExportFormat(e.target.value as 'csv' | 'json')}
+            className="text-sm border border-gray-300 rounded px-2 py-1"
+          >
+            <option value="csv">CSV</option>
+            <option value="json">JSON</option>
+          </select>
+          <button
+            onClick={handleExport}
+            className="flex items-center gap-2 px-4 py-1 bg-green-600 text-white rounded hover:bg-green-700 font-medium transition"
+          >
+            <Download size={16} />
+            Export
+          </button>
+        </div>
       </div>
+
+      {/* Error State */}
+      {error && (
+        <div className="p-3 bg-red-50 border border-red-300 rounded text-red-700 text-sm">
+          {error}
+        </div>
+      )}
 
       {/* Logs List */}
       <div className="space-y-3">
         {loading ? (
-          <div className="text-center py-8 text-gray-500">Loading...</div>
+          <div className="text-center py-8 text-gray-500">Loading audit logs...</div>
         ) : filteredLogs.length === 0 ? (
           <div className="text-center py-8 text-gray-500">No audit logs found</div>
         ) : (
-          filteredLogs.map(log => (
+          pagedLogs.map(log => (
             <div
               key={log.log_id}
-              className={`p-4 border-l-4 rounded cursor-pointer transition hover:shadow-md ${taskColors[log.task]}`}
+              className={`p-4 border-l-4 rounded transition hover:shadow-md cursor-pointer ${taskColors[log.task]}`}
               onClick={() => setExpandedId(expandedId === log.log_id ? null : log.log_id)}
             >
               <div className="flex justify-between items-start">
@@ -178,10 +246,10 @@ export const AuditTrailDashboard: React.FC<AuditTrailDashboardProps> = ({
                       {new Date(log.timestamp).toLocaleString()}
                     </span>
                   </div>
-                  <p className="font-semibold text-gray-800">{log.prediction}</p>
+                  <p className="font-semibold text-gray-800">{log.prediction} · {log.log_id}</p>
                   <div className="flex gap-4 text-sm text-gray-600 mt-1">
-                    <span>Confidence: <span className="font-bold">{(log.confidence * 100).toFixed(1)}%</span></span>
-                    <span>Model: {log.model_version}</span>
+                    <span>Confidence: {(log.confidence * 100).toFixed(0)}%</span>
+                    <span className="font-mono">{log.anonymized_patient_hash}</span>
                     {log.correction_applied && (
                       <span className="text-blue-600 font-semibold">
                         Correction: {log.correction_factor?.toFixed(2)}x
@@ -189,16 +257,21 @@ export const AuditTrailDashboard: React.FC<AuditTrailDashboardProps> = ({
                     )}
                   </div>
                 </div>
-                <div className="text-right text-xs text-gray-500">
-                  <p>ID: {log.log_id.substring(0, 8)}...</p>
-                  <p>{log.consent_verified ? '✓ Consent' : '⚠ No Consent'}</p>
+                <div className="flex flex-col items-end gap-2">
+                  <p className="text-xs text-gray-500">{log.consent_verified ? '✓ Consent' : '⚠ No Consent'}</p>
+                  <button
+                    aria-label="Details"
+                    onClick={(e) => { e.stopPropagation(); setExpandedId(expandedId === log.log_id ? null : log.log_id); }}
+                    className="text-xs text-blue-600 hover:text-blue-800 px-2 py-1 border border-blue-300 rounded"
+                  >
+                    {expandedId === log.log_id ? 'Hide' : 'Details'}
+                  </button>
                 </div>
               </div>
 
               {/* Expanded Details */}
               {expandedId === log.log_id && (
                 <div className="mt-4 pt-4 border-t space-y-3 text-sm">
-                  {/* Core Prediction Info */}
                   <div className="bg-white bg-opacity-50 rounded p-3 space-y-2">
                     <h4 className="font-semibold text-gray-800">Prediction Details</h4>
                     <div className="grid grid-cols-2 gap-2 text-xs">
@@ -207,47 +280,20 @@ export const AuditTrailDashboard: React.FC<AuditTrailDashboardProps> = ({
                         <p className="font-mono text-gray-800">{log.log_id}</p>
                       </div>
                       <div>
-                        <p className="text-gray-600">Patient Hash</p>
-                        <p className="font-mono text-gray-800">{log.anonymized_patient_hash.substring(0, 16)}...</p>
-                      </div>
-                      <div>
-                        <p className="text-gray-600">Consent Verified</p>
-                        <p className="font-bold text-green-700">{log.consent_verified ? 'Yes' : 'No'}</p>
-                      </div>
-                      <div>
                         <p className="text-gray-600">Ethics Approval</p>
                         <p className="font-mono text-gray-800">{log.ethics_approval_id}</p>
                       </div>
                     </div>
                   </div>
 
-                  {/* Clinician Feedback (if available) */}
-                  {log.clinician_feedback && (
-                    <div className="bg-blue-50 rounded p-3 space-y-2 border border-blue-200">
-                      <h4 className="font-semibold text-blue-900">Clinician Feedback</h4>
-                      <div>
-                        <p className="text-xs text-blue-700">
-                          <span className="font-semibold">Clinician ID:</span> {log.clinician_feedback.clinician_id}
-                        </p>
-                        <p className="text-xs text-blue-700">
-                          <span className="font-semibold">Agreement:</span> {log.clinician_feedback.clinician_agreement}/5
-                        </p>
-                        <p className="text-xs text-blue-700">
-                          <span className="font-semibold">Submitted:</span>{' '}
-                          {new Date(log.clinician_feedback.feedback_timestamp).toLocaleString()}
-                        </p>
-                      </div>
-                      {log.clinician_feedback.clinician_feedback && (
-                        <p className="text-xs italic text-blue-800 bg-white bg-opacity-50 p-2 rounded">
-                          "{log.clinician_feedback.clinician_feedback}"
-                        </p>
-                      )}
-                    </div>
+                  {log.clinician_feedback?.clinician_feedback && (
+                    <p className="text-xs italic text-blue-700 bg-blue-50 p-2 rounded border border-blue-200">
+                      Clinician feedback: &ldquo;{log.clinician_feedback.clinician_feedback}&rdquo;
+                    </p>
                   )}
 
-                  {/* Immutability Note */}
                   <div className="text-xs text-gray-500 italic">
-                    This record is immutable and cannot be modified after creation (append-only audit trail).
+                    This record is immutable and cannot be modified after creation.
                   </div>
                 </div>
               )}
@@ -255,6 +301,27 @@ export const AuditTrailDashboard: React.FC<AuditTrailDashboardProps> = ({
           ))
         )}
       </div>
+
+      {/* Pagination */}
+      {totalPages > 1 && (
+        <div className="flex items-center justify-center gap-3 pt-2">
+          <button
+            onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+            disabled={currentPage === 1}
+            className="px-3 py-1 rounded border text-sm disabled:opacity-50"
+          >
+            Previous
+          </button>
+          <span className="text-sm text-gray-600">Page {currentPage} of {totalPages}</span>
+          <button
+            onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+            disabled={currentPage === totalPages}
+            className="px-3 py-1 rounded border text-sm disabled:opacity-50"
+          >
+            Next
+          </button>
+        </div>
+      )}
 
       {/* Info Footer */}
       <div className="p-4 bg-blue-50 border border-blue-200 rounded text-sm text-blue-900">

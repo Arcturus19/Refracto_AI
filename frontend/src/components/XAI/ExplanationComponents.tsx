@@ -1,6 +1,37 @@
 import React, { useState, useEffect } from 'react';
 import { AlertCircle, Brain, TrendingUp, Eye, ChevronDown } from 'lucide-react';
 
+// Minimal Card UI primitives
+export const Card: React.FC<{ children: React.ReactNode; className?: string }> = ({ children, className = '' }) => (
+  <div className={`bg-white border border-gray-200 rounded-lg shadow-sm ${className}`}>{children}</div>
+);
+export const CardHeader: React.FC<{ children: React.ReactNode; className?: string; onClick?: () => void; style?: React.CSSProperties }> = ({ children, className = '', onClick, style }) => (
+  <div className={`px-4 py-3 border-b border-gray-100 ${className}`} onClick={onClick} style={style}>{children}</div>
+);
+export const CardTitle: React.FC<{ children: React.ReactNode; className?: string }> = ({ children, className = '' }) => (
+  <h3 className={`font-semibold text-gray-900 ${className}`}>{children}</h3>
+);
+export const CardDescription: React.FC<{ children: React.ReactNode; className?: string }> = ({ children, className = '' }) => (
+  <p className={`text-sm text-gray-500 ${className}`}>{children}</p>
+);
+export const CardContent: React.FC<{ children: React.ReactNode; className?: string }> = ({ children, className = '' }) => (
+  <div className={`px-4 py-3 ${className}`}>{children}</div>
+);
+
+// Minimal Tabs UI primitives
+export const Tabs: React.FC<{ children: React.ReactNode; defaultValue?: string; className?: string }> = ({ children, className = '' }) => (
+  <div className={className}>{children}</div>
+);
+export const TabsList: React.FC<{ children: React.ReactNode; className?: string }> = ({ children, className = '' }) => (
+  <div className={`flex border-b border-gray-200 ${className}`}>{children}</div>
+);
+export const TabsTrigger: React.FC<{ children: React.ReactNode; value: string; className?: string }> = ({ children, className = '' }) => (
+  <button className={`px-4 py-2 text-sm font-medium ${className}`}>{children}</button>
+);
+export const TabsContent: React.FC<{ children: React.ReactNode; value: string; className?: string }> = ({ children, className = '' }) => (
+  <div className={className}>{children}</div>
+);
+
 interface ExplanationData {
   prediction_id: string;
   task: string;

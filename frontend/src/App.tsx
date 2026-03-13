@@ -5,6 +5,7 @@ import MainLayout from './layouts/MainLayout'
 import Dashboard from './pages/Dashboard'
 import AnalysisPage from './pages/AnalysisPage'
 import PatientList from './pages/PatientList'
+import PatientDetails from './pages/PatientDetails'
 import LoginPage from './pages/LoginPage'
 import ProtectedRoute from './components/ProtectedRoute'
 import { useAuthStore } from './store/useAuthStore'
@@ -51,6 +52,16 @@ export default function App() {
             <ProtectedRoute>
               <MainLayout>
                 <PatientList />
+              </MainLayout>
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/patients/:id"
+          element={
+            <ProtectedRoute>
+              <MainLayout>
+                <PatientDetails />
               </MainLayout>
             </ProtectedRoute>
           }

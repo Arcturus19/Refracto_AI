@@ -1,5 +1,5 @@
 import React from 'react'
-import { LayoutDashboard, Users, Brain, FileText, Settings, X } from 'lucide-react'
+import { LayoutDashboard, Users, Brain, FileText, Settings, X, Zap } from 'lucide-react'
 import { Link, useLocation } from 'react-router-dom'
 
 interface SidebarProps {

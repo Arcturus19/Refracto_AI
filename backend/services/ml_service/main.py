@@ -10,6 +10,7 @@ from config import settings
 from core.model_loader import get_models, load_models_on_startup
 from core.preprocessing import get_preprocessor
 from core.xai_engine import get_explainer
+from xai_api_routes import router as xai_router
 from PIL import Image
 import io
 import numpy as np
@@ -74,6 +75,9 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Register XAI explainability routes
+app.include_router(xai_router, prefix="/api/ml", tags=["explainability"])
+
 
 # ============ Root & Health Endpoints ============
 
@@ -92,7 +96,12 @@ async def root():
             "analyze_fundus": "/analyze/fundus",
             "analyze_oct": "/analyze/oct",
             "predict": "/predict",
-            "test_data_loading": "/test-data-loading"
+            "test_data_loading": "/test-data-loading",
+            "xai_explain_dr": "/api/ml/xai/explain/dr",
+            "xai_explain_glaucoma": "/api/ml/xai/explain/glaucoma",
+            "xai_explain_refraction": "/api/ml/xai/explain/refraction",
+            "xai_feature_importance": "/api/ml/xai/feature-importance/{task}",
+            "xai_interpretation_guide": "/api/ml/xai/interpretation-guide"
         }
     }
 

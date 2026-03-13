@@ -11,6 +11,9 @@ from typing import Dict, Optional, Tuple
 import logging
 import os
 from config import settings
+from core.fusion import MultiHeadFusion, MultiTaskFusionHead
+from core.clinical_fusion import ClinicalDataEncoder
+from core.refracto_pathological_link import RefractoPathologicalLink
 
 logger = logging.getLogger(__name__)
 
@@ -86,6 +89,12 @@ class RefractoModels:
             self.refraction_backbone: Optional[nn.Module] = None
             self.refraction_head: Optional[RefractionHead] = None
             
+            # Hybrid Fusion + MTL Models
+            self.fusion: Optional[MultiHeadFusion] = None
+            self.mtl_head: Optional[MultiTaskFusionHead] = None
+            self.clinical_encoder: Optional[ClinicalDataEncoder] = None
+            self.refracto_link: Optional[RefractoPathologicalLink] = None
+            
             # Image processors
             self.vit_processor: Optional[ViTImageProcessor] = None
             
@@ -118,6 +127,9 @@ class RefractoModels:
             
             # 3. Load Refraction Model (Regression)
             self._load_refraction_model()
+            
+            # 4. Load Hybrid Fusion Modules
+            self._load_hybrid_fusion_models()
             
             RefractoModels._models_loaded = True
             logger.info("=" * 60)
@@ -224,6 +236,23 @@ class RefractoModels:
         except Exception as e:
             logger.error(f"   ✗ Failed to load refraction model: {str(e)}")
             raise
+            
+    def _load_hybrid_fusion_models(self):
+        """Load Hybrid Fusion, clinical encoder, and refracto-pathological link"""
+        logger.info("🔗 Loading Hybrid Fusion Modules...")
+        try:
+            self.fusion = MultiHeadFusion(fundus_dim=1536, oct_dim=768, fused_dim=512, num_heads=8).to(self.device).eval()
+            self.clinical_encoder = ClinicalDataEncoder(input_dim=5, encoded_dim=64).to(self.device).eval()
+            self.mtl_head = MultiTaskFusionHead(input_dim=512, clinical_dim=64, num_dr_classes=5, num_glaucoma_classes=2).to(self.device).eval()
+            self.refracto_link = RefractoPathologicalLink().to(self.device).eval()
+            
+            logger.info("   ✓ MultiHeadFusion loaded")
+            logger.info("   ✓ ClinicalDataEncoder loaded")
+            logger.info("   ✓ MultiTaskFusionHead loaded")
+            logger.info("   ✓ RefractoPathologicalLink loaded")
+        except Exception as e:
+            logger.error(f"   ✗ Failed to load hybrid fusion models: {str(e)}")
+            raise
     
     @torch.no_grad()
     def predict(
@@ -260,6 +289,61 @@ class RefractoModels:
             return self._predict_refraction(image_tensor)
         else:
             raise ValueError(f"Unknown task_type: {task_type}")
+            
+    @torch.no_grad()
+    def predict_mtl(self, fundus_image: torch.Tensor, oct_image: torch.Tensor, clinical_features: Optional[torch.Tensor] = None) -> Dict:
+        """Multi-modal prediction using fused features + structured data."""
+        if not self._models_loaded:
+            raise RuntimeError("Models not loaded. Call load_models() first.")
+            
+        fundus_image = fundus_image.to(self.device)
+        oct_image = oct_image.to(self.device)
+        
+        # Extract features (without classification head)
+        try:
+            # For EfficientNet, forward_features gets the pooled features
+            fundus_features = self.fundus_model.forward_features(fundus_image) # Often (B, C, H, W)
+            fundus_features = self.fundus_model.global_pool(fundus_features) # (B, 1000)
+        except Exception:
+            # Fallback
+            fundus_features = self.refraction_backbone(fundus_image)
+            fundus_features = torch.nn.functional.adaptive_avg_pool2d(fundus_features, (1, 1)).flatten(1)
+            
+        try:
+            # For ViT
+            vit_out = self.oct_model.vit(oct_image)
+            if getattr(vit_out, 'pooler_output', None) is not None:
+                oct_features = vit_out.pooler_output # (B, 768)
+            else:
+                oct_features = self.oct_model(oct_image, output_hidden_states=True).hidden_states[-1][:, 0, :]
+        except Exception:
+            # Fallback for ViT
+            oct_features = self.oct_model(oct_image, output_hidden_states=True).hidden_states[-1][:, 0, :]
+            
+        # Fuse Visual modalities
+        fused_visual = self.fusion(fundus_features, oct_features)
+        
+        # Encode clinical features if present
+        encoded_clinical = None
+        if clinical_features is not None:
+            clinical_features = clinical_features.to(self.device)
+            encoded_clinical = self.clinical_encoder(clinical_features)
+            
+        # Multi-task prediction
+        dr_logits, glaucoma_logits, refraction = self.mtl_head(fused_visual, encoded_clinical)
+        
+        # Apply Refracto-pathological linking (Glaucoma correction)
+        glaucoma_corrected = self.refracto_link(glaucoma_logits, refraction[:, 0])
+        correction_factor = self.refracto_link.get_correction_factor(refraction[:, 0])
+        
+        return {
+            "dr_logits": dr_logits,
+            "dr_label": torch.argmax(dr_logits, dim=1),
+            "glaucoma_logits": glaucoma_corrected,
+            "glaucoma_prob": torch.softmax(glaucoma_corrected, dim=1)[:, 1],
+            "refraction": refraction, # [sphere, cylinder, axis]
+            "correction_factor": correction_factor
+        }
     
     def _predict_fundus(self, image_tensor: torch.Tensor) -> Dict:
         """
@@ -392,6 +476,10 @@ class RefractoModels:
                     "task": "Refraction Measurement",
                     "outputs": ["Sphere", "Cylinder", "Axis"],
                     "loaded": self.refraction_backbone is not None and self.refraction_head is not None
+                },
+                "hybrid": {
+                    "task": "Hybrid MTL + Clinical Data Fusion + XAI",
+                    "loaded": self.fusion is not None and self.clinical_encoder is not None
                 }
             }
         }

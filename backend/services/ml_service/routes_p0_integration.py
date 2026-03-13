@@ -18,8 +18,8 @@ from datetime import datetime
 import asyncio
 import logging
 
-# Backend module imports (P0.1-P0.6)
 from core.fusion import MultiHeadFusion, MultiTaskFusionHead
+from core.clinical_fusion import ClinicalDataEncoder
 from core.refracto_pathological_link import RefractoPathologicalLink, apply_refracto_link
 from core.multimodal_ingestion import MultiModalIngester, ImageQualityScore
 from core.local_data_manager import LocalDataManager, ConsentRecord
@@ -92,6 +92,7 @@ logger = logging.getLogger(__name__)
 # Initialize P0 modules globally (would be in a singleton/factory in production)
 _fusion_model = None
 _mtl_head = None
+_clinical_encoder = None
 _refracto_link = None
 _ingester = None
 _local_data_manager = None
@@ -100,12 +101,13 @@ _audit_logger = None
 
 def get_models():
     """Initialize ML models (lazy load)"""
-    global _fusion_model, _mtl_head, _refracto_link, _ingester, _local_data_manager, _ccr_manager, _audit_logger
+    global _fusion_model, _mtl_head, _clinical_encoder, _refracto_link, _ingester, _local_data_manager, _ccr_manager, _audit_logger
     
     if _fusion_model is None:
         logger.info("Initializing P0 models...")
         _fusion_model = MultiHeadFusion(fundus_dim=1000, oct_dim=768, fused_dim=512, num_heads=8)
-        _mtl_head = MultiTaskFusionHead(input_dim=512, num_dr_classes=5, num_glaucoma_classes=2)
+        _clinical_encoder = ClinicalDataEncoder(input_dim=5, encoded_dim=64)
+        _mtl_head = MultiTaskFusionHead(input_dim=512, clinical_dim=64, num_dr_classes=5, num_glaucoma_classes=2)
         _refracto_link = RefractoPathologicalLink()
         _ingester = MultiModalIngester()
         _local_data_manager = LocalDataManager()
@@ -116,6 +118,7 @@ def get_models():
     return {
         'fusion': _fusion_model,
         'mtl_head': _mtl_head,
+        'clinical_encoder': _clinical_encoder,
         'refracto_link': _refracto_link,
         'ingester': _ingester,
         'local_data_manager': _local_data_manager,
@@ -156,16 +159,30 @@ async def analyze_multi_modal(request: MultiModalAnalysisRequest):
         if ingestion_result['status'] != 'accepted':
             raise HTTPException(status_code=400, detail=f"Image validation failed: {ingestion_result['status']}")
         
-        # Feature extraction (mock - in production, use actual model features)
+        # feature extraction (mock - in production, use actual model features)
         fundus_features = torch.randn(1, 1000)  # (1, fundus_dim)
         oct_features = torch.randn(1, 768)      # (1, oct_dim)
+        
+        # Parse clinical metadata if provided (Age, IOP, Diabetes, SphericalEq, Gender)
+        encoded_clinical = None
+        if request.metadata and 'clinical_data' in request.metadata:
+            clinical = request.metadata['clinical_data']
+            age = float(clinical.get('age', 50)) / 100.0
+            iop = float(clinical.get('iop', 15)) / 40.0
+            diabetes = 1.0 if str(clinical.get('diabetes_status', 'No')).lower() in ['yes', 'true', '1'] else 0.0
+            spherical_equivalent = float(clinical.get('spherical_equivalent', 0.0) + 20) / 30.0
+            gender = 1.0 if str(clinical.get('gender', 'Male')).lower() == 'female' else 0.0
+            
+            clinical_tensor = torch.tensor([[age, iop, diabetes, spherical_equivalent, gender]], dtype=torch.float32)
+            with torch.no_grad():
+                encoded_clinical = models['clinical_encoder'](clinical_tensor)
         
         # P0.1: Apply fusion
         with torch.no_grad():
             fused_features = models['fusion'](fundus_features, oct_features)  # (1, 512)
             
             # P0.1: Get MTL predictions
-            dr_logits, glaucoma_logits, refraction_values = models['mtl_head'](fused_features)
+            dr_logits, glaucoma_logits, refraction_values = models['mtl_head'](fused_features, encoded_clinical)
             
             # P0.2: Apply refracto-pathological link
             predicted_sphere = refraction_values[0, 0].item()

@@ -23,6 +23,13 @@ interface UploadStatus {
 export const MultiModalUploader: React.FC = () => {
   const [uploads, setUploads] = useState<UploadStatus>({});
   const [analyzing, setAnalyzing] = useState(false);
+  const [clinicalData, setClinicalData] = useState({
+    age: 50,
+    iop: 15,
+    diabetes_status: 'No',
+    gender: 'Male',
+    spherical_equivalent: 0.0
+  });
 
   const handleFileSelect = useCallback((type: 'fundus' | 'oct', file: File) => {
     if (!file.type.includes('image')) {
@@ -58,6 +65,9 @@ export const MultiModalUploader: React.FC = () => {
     const formData = new FormData();
     formData.append('fundus', uploads.fundus.file);
     formData.append('oct', uploads.oct.file);
+    
+    // Append clinical data properly formatted as JSON string
+    formData.append('metadata', JSON.stringify({ clinical_data: clinicalData }));
 
     try {
       const response = await fetch('/api/ml/analyze/mtl', {
@@ -135,13 +145,72 @@ export const MultiModalUploader: React.FC = () => {
         </div>
       )}
 
+      {/* Clinical Metadata Inputs */}
+      <div className="mb-6 p-4 bg-gray-50 rounded-lg border border-gray-200">
+        <h3 className="text-lg font-semibold mb-4 text-gray-700">Clinical Metadata (Optional)</h3>
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Age</label>
+            <input 
+              type="number" 
+              value={clinicalData.age}
+              onChange={(e) => setClinicalData({...clinicalData, age: Number(e.target.value)})}
+              className="w-full p-2 border rounded focus:ring-blue-500 focus:border-blue-500"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">IOP (mmHg)</label>
+            <input 
+              type="number" 
+              value={clinicalData.iop}
+              step="0.1"
+              onChange={(e) => setClinicalData({...clinicalData, iop: Number(e.target.value)})}
+              className="w-full p-2 border rounded focus:ring-blue-500 focus:border-blue-500"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Spherical Equivalent</label>
+            <input 
+              type="number" 
+              value={clinicalData.spherical_equivalent}
+              step="0.25"
+              onChange={(e) => setClinicalData({...clinicalData, spherical_equivalent: Number(e.target.value)})}
+              className="w-full p-2 border rounded focus:ring-blue-500 focus:border-blue-500"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Diabetes Status</label>
+            <select 
+              value={clinicalData.diabetes_status}
+              onChange={(e) => setClinicalData({...clinicalData, diabetes_status: e.target.value})}
+              className="w-full p-2 border rounded focus:ring-blue-500 focus:border-blue-500"
+            >
+              <option value="No">No</option>
+              <option value="Yes">Yes</option>
+            </select>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Gender</label>
+            <select 
+              value={clinicalData.gender}
+              onChange={(e) => setClinicalData({...clinicalData, gender: e.target.value})}
+              className="w-full p-2 border rounded focus:ring-blue-500 focus:border-blue-500"
+            >
+              <option value="Male">Male</option>
+              <option value="Female">Female</option>
+              <option value="Other">Other</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
       {/* Analyze button */}
       <button
         onClick={handleAnalyze}
         disabled={!uploads.fundus || !uploads.oct || analyzing}
         className="w-full bg-blue-600 text-white py-3 rounded hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed font-medium transition"
       >
-        {analyzing ? 'Analyzing...' : 'Analyze Images'}
+        {analyzing ? 'Analyzing...' : 'Analyze Hybrid Data'}
       </button>
 
       {/* Help text */}

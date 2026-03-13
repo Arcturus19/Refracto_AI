@@ -89,12 +89,15 @@ class MultiTaskFusionHead(nn.Module):
     3. Refraction parameters (3-value regression: sphere, cylinder, axis)
     """
     
-    def __init__(self, input_dim: int = 512, num_dr_classes: int = 5, num_glaucoma_classes: int = 2):
+    def __init__(self, input_dim: int = 512, clinical_dim: int = 0, num_dr_classes: int = 5, num_glaucoma_classes: int = 2):
         super().__init__()
+        
+        self.clinical_dim = clinical_dim
+        total_input_dim = input_dim + clinical_dim
         
         # Shared dense layers after fusion
         self.shared = nn.Sequential(
-            nn.Linear(input_dim, 256),
+            nn.Linear(total_input_dim, 256),
             nn.ReLU(),
             nn.Dropout(0.2),
             nn.Linear(256, 128),
@@ -123,18 +126,25 @@ class MultiTaskFusionHead(nn.Module):
             nn.Linear(64, 3)
         )
     
-    def forward(self, fused_features: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+    def forward(self, fused_features: torch.Tensor, clinical_features: Optional[torch.Tensor] = None) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         """Multi-task prediction.
         
         Args:
             fused_features: (B, 512) from MultiHeadFusion
+            clinical_features: (B, clinical_dim) optional encoded clinical metadata
         
         Returns:
             dr_logits: (B, 5) for 5 DR classes
             glaucoma_logits: (B, 2) for glaucoma (healthy/glaucoma)
             refraction: (B, 3) for (Sphere, Cylinder, Axis)
         """
-        shared = self.shared(fused_features)
+        if self.clinical_dim > 0 and clinical_features is not None:
+            # Concatenate visual fusion with clinical metadata (GBM proxy)
+            combined_features = torch.cat([fused_features, clinical_features], dim=1)
+        else:
+            combined_features = fused_features
+            
+        shared = self.shared(combined_features)
         
         dr_logits = self.dr_head(shared)
         glaucoma_logits = self.glaucoma_head(shared)

@@ -1,5 +1,6 @@
 import React, { useState, useCallback } from 'react';
-import { Upload, CheckCircle, AlertCircle, XCircle } from 'lucide-react';
+import { Upload, CheckCircle, AlertCircle, XCircle, Loader2 } from 'lucide-react';
+import { generateDicomPreview } from '../utils/dicomParser';
 
 interface ImagePreview {
   file: File;
@@ -32,21 +33,45 @@ export const MultiModalUploader: React.FC = () => {
   });
 
   const handleFileSelect = useCallback((type: 'fundus' | 'oct', file: File) => {
-    if (!file.type.includes('image')) {
-      setUploads(prev => ({ ...prev, error: 'Please select an image file' }));
+    const isImage = file.type.startsWith('image/');
+    const isDicom = file.name.toLowerCase().endsWith('.dcm') || file.name.toLowerCase().endsWith('.dicom');
+
+    if (!isImage && !isDicom) {
+      setUploads(prev => ({ ...prev, error: 'Please select an image or DICOM file' }));
       return;
     }
 
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      const preview = e.target?.result as string;
-      setUploads(prev => ({
-        ...prev,
-        [type]: { file, preview },
-        error: undefined
-      }));
-    };
-    reader.readAsDataURL(file);
+    setUploads(prev => ({ ...prev, processing: true, error: undefined }));
+
+    if (isDicom) {
+      generateDicomPreview(file)
+        .then(preview => {
+          setUploads(prev => ({
+            ...prev,
+            [type]: { file, preview },
+            processing: false
+          }));
+        })
+        .catch(err => {
+          console.error("DICOM preview generation failed:", err);
+          setUploads(prev => ({
+             ...prev, 
+             processing: false, 
+             error: 'Failed to generate DICOM preview' 
+          }));
+        });
+    } else {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const preview = e.target?.result as string;
+        setUploads(prev => ({
+          ...prev,
+          [type]: { file, preview },
+          processing: false
+        }));
+      };
+      reader.readAsDataURL(file);
+    }
   }, []);
 
   const handleDrop = (type: 'fundus' | 'oct') => (e: React.DragEvent) => {
@@ -94,29 +119,50 @@ export const MultiModalUploader: React.FC = () => {
     const inputId = `${type}-input`;
 
     return (
-      <div className="w-full sm:flex-1 border-2 border-dashed border-blue-300 rounded-lg p-6 text-center bg-blue-50 hover:bg-blue-100 transition" onDrop={handleDrop(type)} onDragOver={(e) => e.preventDefault()}>
+      <div 
+        className={`w-full sm:flex-1 border-2 border-dashed rounded-2xl p-8 text-center transition-all duration-300 group
+          ${image ? 'border-sky-300 bg-sky-50/50' : 'border-slate-300 bg-slate-50 hover:bg-sky-50 hover:border-sky-300 hover:-translate-y-1 hover:shadow-lg hover:shadow-sky-100'}
+        `}
+        onDrop={handleDrop(type)} 
+        onDragOver={(e) => e.preventDefault()}
+      >
         <input
           id={inputId}
           type="file"
-          accept="image/*"
+          accept="image/*,.dcm,.dicom"
           hidden
           onChange={(e) => e.target.files?.[0] && handleFileSelect(type, e.target.files[0])}
         />
         
         {image ? (
-          <div className="space-y-2">
-            <img src={image.preview} alt={label} className="w-32 h-32 object-cover mx-auto rounded" />
-            <p className="text-sm font-medium text-gray-700">{label} ✓</p>
-            <button onClick={() => setUploads(prev => ({ ...prev, [type]: undefined }))} className="text-s text-red-600 hover:underline">
-              Remove
-            </button>
+          <div className="space-y-3 animate-fade-in relative">
+            <div className="relative inline-block">
+              <img src={image.preview} alt={label} className="w-32 h-32 object-cover mx-auto rounded-xl shadow-sm border border-slate-200" />
+              <button 
+                onClick={(e) => { e.preventDefault(); e.stopPropagation(); setUploads(prev => ({ ...prev, [type]: undefined })) }} 
+                className="absolute -top-2 -right-2 bg-white text-rose-500 rounded-full p-1 shadow-md hover:bg-rose-50 transition-colors"
+                title="Remove image"
+              >
+                <XCircle size={18} />
+              </button>
+            </div>
+            <p className="text-sm font-semibold text-slate-700 flex items-center justify-center gap-1">
+              {label} <CheckCircle size={14} className="text-emerald-500" />
+            </p>
+          </div>
+        ) : uploads.processing && !uploads[type] ? (
+          <div className="flex flex-col items-center justify-center h-full min-h-[140px] text-sky-500">
+             <Loader2 size={32} className="animate-spin mb-3" />
+             <span className="text-sm">Processing...</span>
           </div>
         ) : (
-          <div>
-            <Upload size={32} className="mx-auto text-blue-600 mb-2" />
-            <label htmlFor={inputId} className="cursor-pointer">
-              <span className="text-blue-600 hover:underline font-medium">Click to upload</span>
-              <span className="text-gray-500"> or drag {label.toLowerCase()}</span>
+          <div className="flex flex-col items-center justify-center h-full min-h-[140px]">
+            <div className="p-4 bg-white rounded-full shadow-sm mb-4 group-hover:scale-110 group-hover:bg-sky-100 transition-all duration-300">
+              <Upload size={28} className="text-sky-500" />
+            </div>
+            <label htmlFor={inputId} className="cursor-pointer flex flex-col items-center">
+              <span className="text-sky-600 hover:text-sky-700 font-semibold mb-1">Click to upload</span>
+              <span className="text-slate-500 text-sm">or drag {label.toLowerCase()}</span>
             </label>
           </div>
         )}
@@ -125,76 +171,81 @@ export const MultiModalUploader: React.FC = () => {
   };
 
   return (
-    <div className="max-w-4xl mx-auto p-6 bg-white rounded-lg shadow">
-      <h2 className="text-2xl font-bold mb-6 flex items-center gap-2">
-        <Upload className="text-blue-600" />
+    <div className="max-w-4xl mx-auto p-8 bg-white rounded-3xl premium-shadow">
+      <h2 className="text-2xl font-bold mb-8 flex items-center gap-3 text-slate-800">
+        <div className="p-2.5 bg-sky-50 text-sky-600 rounded-xl">
+          <Upload size={24} />
+        </div>
         Multi-Modal Image Analysis
       </h2>
 
       {/* Upload boxes */}
-      <div className="flex flex-col sm:flex-row gap-6 mb-6">
+      <div className="flex flex-col sm:flex-row gap-6 mb-8">
         {renderUploadBox('fundus', 'Fundus Image')}
         {renderUploadBox('oct', 'OCT Image')}
       </div>
 
       {/* Error message */}
       {uploads.error && (
-        <div className="mb-4 p-3 bg-red-100 border border-red-300 rounded text-red-700 flex items-center gap-2">
-          <XCircle size={18} />
-          {uploads.error}
+        <div className="mb-6 p-4 bg-rose-50 border border-rose-100 rounded-2xl text-rose-700 flex items-center gap-3 animate-fade-in shadow-sm">
+          <AlertCircle size={20} className="text-rose-500 flex-shrink-0" />
+          <span className="font-medium">{uploads.error}</span>
         </div>
       )}
 
       {/* Clinical Metadata Inputs */}
-      <div className="mb-6 p-4 bg-gray-50 rounded-lg border border-gray-200">
-        <h3 className="text-lg font-semibold mb-4 text-gray-700">Clinical Metadata (Optional)</h3>
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+      <div className="mb-8 p-6 bg-slate-50/80 rounded-2xl border border-slate-100/80">
+        <h3 className="text-lg font-semibold mb-5 text-slate-800 flex items-center gap-2">
+          Clinical Metadata 
+          <span className="text-xs font-normal text-slate-500 bg-slate-200/50 px-2 py-0.5 rounded-full">Optional</span>
+        </h3>
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-5">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Age</label>
+            <label className="block text-sm font-semibold text-slate-700 mb-1.5">Age</label>
             <input 
               type="number" 
               value={clinicalData.age}
               onChange={(e) => setClinicalData({...clinicalData, age: Number(e.target.value)})}
-              className="w-full p-2 border rounded focus:ring-blue-500 focus:border-blue-500"
+              className="w-full px-4 py-2.5 bg-white border border-slate-200 rounded-xl focus:ring-4 focus:ring-sky-500/10 focus:border-sky-500 transition-all outline-none text-slate-800"
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">IOP (mmHg)</label>
+            <label className="block text-sm font-semibold text-slate-700 mb-1.5">IOP (mmHg)</label>
             <input 
               type="number" 
               value={clinicalData.iop}
               step="0.1"
               onChange={(e) => setClinicalData({...clinicalData, iop: Number(e.target.value)})}
-              className="w-full p-2 border rounded focus:ring-blue-500 focus:border-blue-500"
+              className="w-full px-4 py-2.5 bg-white border border-slate-200 rounded-xl focus:ring-4 focus:ring-sky-500/10 focus:border-sky-500 transition-all outline-none text-slate-800"
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Spherical Equivalent</label>
+            <label className="block text-sm font-semibold text-slate-700 mb-1.5">Spherical Eq</label>
             <input 
               type="number" 
               value={clinicalData.spherical_equivalent}
               step="0.25"
               onChange={(e) => setClinicalData({...clinicalData, spherical_equivalent: Number(e.target.value)})}
-              className="w-full p-2 border rounded focus:ring-blue-500 focus:border-blue-500"
+              className="w-full px-4 py-2.5 bg-white border border-slate-200 rounded-xl focus:ring-4 focus:ring-sky-500/10 focus:border-sky-500 transition-all outline-none text-slate-800"
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Diabetes Status</label>
+            <label className="block text-sm font-semibold text-slate-700 mb-1.5">Diabetes Status</label>
             <select 
               value={clinicalData.diabetes_status}
               onChange={(e) => setClinicalData({...clinicalData, diabetes_status: e.target.value})}
-              className="w-full p-2 border rounded focus:ring-blue-500 focus:border-blue-500"
+              className="w-full px-4 py-2.5 bg-white border border-slate-200 rounded-xl focus:ring-4 focus:ring-sky-500/10 focus:border-sky-500 transition-all outline-none text-slate-800"
             >
               <option value="No">No</option>
               <option value="Yes">Yes</option>
             </select>
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Gender</label>
+            <label className="block text-sm font-semibold text-slate-700 mb-1.5">Gender</label>
             <select 
               value={clinicalData.gender}
               onChange={(e) => setClinicalData({...clinicalData, gender: e.target.value})}
-              className="w-full p-2 border rounded focus:ring-blue-500 focus:border-blue-500"
+              className="w-full px-4 py-2.5 bg-white border border-slate-200 rounded-xl focus:ring-4 focus:ring-sky-500/10 focus:border-sky-500 transition-all outline-none text-slate-800"
             >
               <option value="Male">Male</option>
               <option value="Female">Female</option>
@@ -208,9 +259,9 @@ export const MultiModalUploader: React.FC = () => {
       <button
         onClick={handleAnalyze}
         disabled={!uploads.fundus || !uploads.oct || analyzing}
-        className="w-full bg-blue-600 text-white py-3 rounded hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed font-medium transition"
+        className="w-full bg-sky-600 text-white py-4 rounded-xl hover:bg-sky-700 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:translate-y-0 font-semibold text-lg transition-all duration-300 hover:-translate-y-1 shadow-lg shadow-sky-600/20 active:scale-[0.98]"
       >
-        {analyzing ? 'Analyzing...' : 'Analyze Hybrid Data'}
+        {analyzing ? 'Analyzing Multi-Modal Data...' : 'Analyze Hybrid Data'}
       </button>
 
       {/* Help text */}

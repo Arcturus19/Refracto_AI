@@ -1,5 +1,6 @@
 import React, { useState, useCallback } from 'react'
-import { Upload, X, Image as ImageIcon, FileText, CheckCircle, AlertCircle } from 'lucide-react'
+import { Upload, X, Image as ImageIcon, FileText, CheckCircle, AlertCircle, Loader2 } from 'lucide-react'
+import { generateDicomPreview } from '../utils/dicomParser'
 
 interface ImageUploaderProps {
     patientId: string
@@ -9,6 +10,7 @@ interface ImageUploaderProps {
 interface FilePreview {
     file: File
     preview: string | null
+    isGeneratingPreview?: boolean
     status: 'pending' | 'uploading' | 'success' | 'error'
     error?: string
 }
@@ -53,19 +55,42 @@ export default function ImageUploader({ patientId, onUploadSuccess }: ImageUploa
 
     // Process and preview files
     const processFiles = (newFiles: File[]) => {
-        const filePreviews: FilePreview[] = newFiles.map(file => {
-            // Create preview for images
+        const initialPreviews: FilePreview[] = newFiles.map(file => {
             const isImage = file.type.startsWith('image/')
-            const preview = isImage ? URL.createObjectURL(file) : null
+            const isDicom = file.name.toLowerCase().endsWith('.dcm') || file.name.toLowerCase().endsWith('.dicom')
 
             return {
                 file,
-                preview,
+                preview: isImage ? URL.createObjectURL(file) : null,
+                isGeneratingPreview: isDicom, // Set to true if dicom
                 status: 'pending' as const
             }
         })
 
-        setFiles(prev => [...prev, ...filePreviews])
+        // Add to state immediately
+        setFiles(prev => [...prev, ...initialPreviews])
+
+        // Asynchronously process DICOM files
+        initialPreviews.forEach((filePreview) => {
+            if (filePreview.isGeneratingPreview) {
+                generateDicomPreview(filePreview.file)
+                    .then(previewUrl => {
+                        setFiles(prev => prev.map(p => 
+                            p.file === filePreview.file 
+                                ? { ...p, preview: previewUrl, isGeneratingPreview: false } 
+                                : p
+                        ))
+                    })
+                    .catch(err => {
+                        console.error(`Failed to generate DICOM preview for ${filePreview.file.name}:`, err)
+                        setFiles(prev => prev.map(p => 
+                            p.file === filePreview.file 
+                                ? { ...p, isGeneratingPreview: false } 
+                                : p
+                        ))
+                    })
+            }
+        })
     }
 
     // Remove file from list
@@ -223,7 +248,9 @@ export default function ImageUploader({ patientId, onUploadSuccess }: ImageUploa
                             >
                                 {/* Preview/Icon */}
                                 <div className="flex-shrink-0 w-16 h-16 bg-slate-100 rounded-lg flex items-center justify-center overflow-hidden">
-                                    {filePreview.preview ? (
+                                    {filePreview.isGeneratingPreview ? (
+                                        <Loader2 className="animate-spin text-sky-500" size={24} />
+                                    ) : filePreview.preview ? (
                                         <img
                                             src={filePreview.preview}
                                             alt={filePreview.file.name}

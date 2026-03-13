@@ -1,10 +1,45 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
-html, body, #root {
-  height: 100%;
+@layer base {
+  :root {
+    --primary: 14 165 233; /* sky-500 */
+    --primary-foreground: 255 255 255;
+    --background: 248 250 252; /* slate-50 */
+    --surface: 255 255 255;
+    --border: 226 232 240; /* slate-200 */
+  }
+
+  html, body, #root {
+    height: 100%;
+    @apply font-sans antialiased bg-slate-50 text-slate-800;
+  }
 }
-body {
-  @apply bg-white text-gray-800;
+
+@layer utilities {
+  .glass-panel {
+    @apply bg-white/70 backdrop-blur-md border border-white/20 shadow-[0_8px_30px_rgb(0,0,0,0.04)];
+  }
+  
+  .premium-shadow {
+    @apply shadow-[0_8px_30px_rgb(0,0,0,0.04)];
+  }
+  
+  /* Custom thin scrollbar */
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    @apply bg-slate-200 rounded-full;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    @apply bg-slate-300;
+  }
 }

@@ -92,52 +92,54 @@ ${followUp}
     }
 
     return (
-        <div className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
+        <div className="bg-white rounded-3xl premium-shadow overflow-hidden border border-slate-100/50">
             {/* Header */}
-            <div className="bg-gradient-to-r from-sky-600 to-cyan-500 px-5 py-4">
+            <div className="bg-gradient-to-r from-sky-600 to-cyan-500 px-6 py-5">
                 <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2 text-white">
-                        <FileText size={20} />
-                        <h3 className="font-bold text-base">Clinical Prescription</h3>
+                    <div className="flex items-center gap-3 text-white">
+                        <div className="p-1.5 bg-white/20 rounded-lg backdrop-blur-sm">
+                            <FileText size={20} />
+                        </div>
+                        <h3 className="font-bold text-lg tracking-wide">Clinical Prescription</h3>
                     </div>
-                    <span className="text-sky-100 text-xs bg-sky-700/40 px-2 py-1 rounded-full">{displayDate}</span>
+                    <span className="text-sky-100 text-xs font-medium bg-black/10 backdrop-blur-sm px-3 py-1.5 rounded-full">{displayDate}</span>
                 </div>
-                {patientName && <p className="text-sky-100 text-sm mt-1">Patient: {patientName}</p>}
+                {patientName && <p className="text-sky-50 font-medium text-sm mt-3 flex items-center gap-2"><div className="w-1.5 h-1.5 rounded-full bg-sky-200"></div> Patient: {patientName}</p>}
             </div>
 
-            <div className="p-5 space-y-5">
+            <div className="p-6 space-y-6">
                 {/* Refractive values */}
                 <div>
-                    <div className="flex items-center gap-2 mb-3">
-                        <Eye size={16} className="text-sky-600" />
-                        <span className="text-sm font-semibold text-slate-700 uppercase tracking-wide">Refractive Correction (AI Estimate)</span>
+                    <div className="flex items-center gap-2 mb-4">
+                        <Eye size={18} className="text-sky-600" />
+                        <span className="text-sm font-bold text-slate-800 uppercase tracking-wider">Refractive Correction (AI Estimate)</span>
                     </div>
 
-                    <div className="grid grid-cols-3 gap-3 mb-3">
+                    <div className="grid grid-cols-3 gap-3 mb-4">
                         {[
                             { label: 'Sphere (SPH)', value: `${sphere >= 0 ? '+' : ''}${sphere.toFixed(2)}`, unit: 'D', color: 'sky' },
                             { label: 'Cylinder (CYL)', value: `${cylinder >= 0 ? '+' : ''}${cylinder.toFixed(2)}`, unit: 'D', color: 'cyan' },
                             { label: 'Axis', value: `${Math.round(axis)}`, unit: '°', color: 'indigo' },
                         ].map(({ label, value, unit, color }) => (
-                            <div key={label} className={`bg-${color}-50 border border-${color}-200 rounded-xl p-3 text-center`}>
-                                <div className={`text-xl font-bold text-${color}-700`}>{value}</div>
-                                <div className="text-xs text-slate-500 mt-0.5">{unit}</div>
-                                <div className="text-xs text-slate-600 mt-1 leading-tight">{label}</div>
+                            <div key={label} className={`bg-${color}-50/50 border border-${color}-100 rounded-2xl p-4 text-center shadow-sm`}>
+                                <div className={`text-2xl font-bold text-${color}-700 tracking-tight`}>{value}</div>
+                                <div className="text-xs font-semibold text-slate-400 mt-0.5">{unit}</div>
+                                <div className="text-xs font-medium text-slate-600 mt-1.5 leading-tight">{label}</div>
                             </div>
                         ))}
                     </div>
 
                     {/* Prescription string */}
-                    <div className="bg-slate-800 rounded-xl px-4 py-3 font-mono text-white text-sm flex items-center justify-between">
-                        <span>OD: {prescriptionText}</span>
-                        <span className="text-slate-400 text-xs">OS: Separate scan</span>
+                    <div className="bg-slate-800 rounded-xl px-4 py-3 font-mono text-white text-sm flex items-center justify-between shadow-inner">
+                        <span className="font-bold">OD: {prescriptionText}</span>
+                        <span className="text-slate-400 text-xs bg-slate-700 px-2 py-0.5 rounded">OS: Separate scan</span>
                     </div>
                 </div>
 
                 {/* Refractive classification */}
-                <div className={`border rounded-xl p-3 ${myopia.color}`}>
-                    <div className="font-semibold text-sm">{myopia.label}</div>
-                    <div className="text-xs mt-0.5 opacity-80">{myopia.description}</div>
+                <div className={`border rounded-xl p-4 shadow-sm ${myopia.color}`}>
+                    <div className="font-bold text-sm tracking-wide">{myopia.label}</div>
+                    <div className="text-xs mt-1 font-medium opacity-90 leading-relaxed">{myopia.description}</div>
                 </div>
 
                 {/* Pathology summary */}
@@ -191,19 +193,19 @@ ${followUp}
                 </div>
 
                 {/* Action buttons */}
-                <div className="flex gap-2 pt-1">
+                <div className="flex gap-3 pt-2">
                     <button
                         onClick={handleCopy}
-                        className="flex-1 flex items-center justify-center gap-2 py-2.5 border border-slate-200 text-slate-600 rounded-xl text-sm font-medium hover:bg-slate-50 transition-colors"
+                        className="flex-1 flex items-center justify-center gap-2 py-3 border-2 border-slate-100 text-slate-700 bg-white rounded-xl text-sm font-bold hover:bg-slate-50 hover:border-slate-200 transition-all active:scale-95 shadow-sm"
                     >
-                        {copied ? <Check size={16} className="text-green-600" /> : <Copy size={16} />}
+                        {copied ? <Check size={18} className="text-emerald-500" /> : <Copy size={18} className="text-slate-400" />}
                         {copied ? 'Copied!' : 'Copy Report'}
                     </button>
                     <button
                         onClick={() => window.print()}
-                        className="flex-1 flex items-center justify-center gap-2 py-2.5 bg-sky-600 hover:bg-sky-700 text-white rounded-xl text-sm font-medium transition-colors"
+                        className="flex-1 flex items-center justify-center gap-2 py-3 bg-slate-800 hover:bg-slate-900 text-white rounded-xl text-sm font-bold transition-all active:scale-95 shadow-md shadow-slate-200"
                     >
-                        <Printer size={16} />
+                        <Printer size={18} />
                         Print
                     </button>
                 </div>

@@ -77,10 +77,10 @@ const Dashboard: React.FC = () => {
     return (
         <div className="p-6">
             {/* Header */}
-            <div className="flex justify-between items-center mb-6">
+            <div className="flex flex-col md:flex-row md:justify-between md:items-center mb-8 gap-4">
                 <div>
-                    <h1 className="text-3xl font-bold text-gray-900">Dashboard</h1>
-                    <p className="text-gray-600 mt-1">Welcome back! Here's your overview.</p>
+                    <h1 className="text-3xl font-bold text-slate-900 tracking-tight">Dashboard Overview</h1>
+                    <p className="text-slate-500 mt-1 font-medium">Welcome back! Here's your clinic's performance at a glance.</p>
                 </div>
 
                 {/* Polling Status */}
@@ -101,117 +101,121 @@ const Dashboard: React.FC = () => {
             {/* Stats Grid */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
                 {/* Total Patients */}
-                <div className="bg-white rounded-lg shadow p-6 border-l-4 border-blue-500">
+                <div className="bg-white rounded-2xl premium-shadow p-6 transition-all duration-300 hover:-translate-y-1">
                     <div className="flex items-center justify-between">
                         <div>
-                            <p className="text-gray-600 text-sm font-medium">Total Patients</p>
-                            <p className="text-3xl font-bold text-gray-900 mt-2">{stats.totalPatients}</p>
-                            <p className="text-green-600 text-sm mt-2">↑ 12% from last month</p>
+                            <p className="text-slate-500 text-sm font-semibold tracking-wide uppercase">Total Patients</p>
+                            <p className="text-3xl font-bold text-slate-800 mt-2">{stats.totalPatients}</p>
+                            <p className="text-emerald-500 text-sm font-medium mt-2 flex items-center gap-1">↑ 12% <span className="text-slate-400 font-normal">from last month</span></p>
                         </div>
-                        <div className="bg-blue-100 p-3 rounded-full">
+                        <div className="bg-gradient-to-br from-blue-50 to-blue-100 p-4 rounded-2xl">
                             <Users className="text-blue-600" size={24} />
                         </div>
                     </div>
                 </div>
 
                 {/* Total Scans */}
-                <div className="bg-white rounded-lg shadow p-6 border-l-4 border-purple-500">
+                <div className="bg-white rounded-2xl premium-shadow p-6 transition-all duration-300 hover:-translate-y-1">
                     <div className="flex items-center justify-between">
                         <div>
-                            <p className="text-gray-600 text-sm font-medium">Total Scans</p>
-                            <p className="text-3xl font-bold text-gray-900 mt-2">{stats.totalScans}</p>
-                            <p className="text-green-600 text-sm mt-2">↑ 8% from last month</p>
+                            <p className="text-slate-500 text-sm font-semibold tracking-wide uppercase">Total Scans</p>
+                            <p className="text-3xl font-bold text-slate-800 mt-2">{stats.totalScans}</p>
+                            <p className="text-emerald-500 text-sm font-medium mt-2 flex items-center gap-1">↑ 8% <span className="text-slate-400 font-normal">from last month</span></p>
                         </div>
-                        <div className="bg-purple-100 p-3 rounded-full">
+                        <div className="bg-gradient-to-br from-purple-50 to-purple-100 p-4 rounded-2xl">
                             <Image className="text-purple-600" size={24} />
                         </div>
                     </div>
                 </div>
 
                 {/* Pending Analysis */}
-                <div className="bg-white rounded-lg shadow p-6 border-l-4 border-orange-500">
+                <div className="bg-white rounded-2xl premium-shadow p-6 transition-all duration-300 hover:-translate-y-1">
                     <div className="flex items-center justify-between">
                         <div>
-                            <p className="text-gray-600 text-sm font-medium">Pending Analysis</p>
-                            <p className="text-3xl font-bold text-gray-900 mt-2">{stats.pendingAnalysis}</p>
-                            <p className="text-orange-600 text-sm mt-2">Requires attention</p>
+                            <p className="text-slate-500 text-sm font-semibold tracking-wide uppercase">Pending Analysis</p>
+                            <p className="text-3xl font-bold text-slate-800 mt-2">{stats.pendingAnalysis}</p>
+                            <p className="text-rose-500 text-sm font-medium mt-2 flex items-center gap-1">Requires attention</p>
                         </div>
-                        <div className="bg-orange-100 p-3 rounded-full">
-                            <Activity className="text-orange-600" size={24} />
+                        <div className="bg-gradient-to-br from-rose-50 to-rose-100 p-4 rounded-2xl">
+                            <Activity className="text-rose-600" size={24} />
                         </div>
                     </div>
                 </div>
 
                 {/* AI Accuracy */}
-                <div className="bg-white rounded-lg shadow p-6 border-l-4 border-green-500">
+                <div className="bg-white rounded-2xl premium-shadow p-6 transition-all duration-300 hover:-translate-y-1">
                     <div className="flex items-center justify-between">
                         <div>
-                            <p className="text-gray-600 text-sm font-medium">AI Accuracy</p>
-                            <p className="text-3xl font-bold text-gray-900 mt-2">{stats.accuracy}%</p>
-                            <p className="text-green-600 text-sm mt-2">Excellent performance</p>
+                            <p className="text-slate-500 text-sm font-semibold tracking-wide uppercase">AI Accuracy</p>
+                            <p className="text-3xl font-bold text-slate-800 mt-2">{stats.accuracy}%</p>
+                            <p className="text-emerald-500 text-sm font-medium mt-2 flex items-center gap-1">Excellent range</p>
                         </div>
-                        <div className="bg-green-100 p-3 rounded-full">
-                            <TrendingUp className="text-green-600" size={24} />
+                        <div className="bg-gradient-to-br from-emerald-50 to-emerald-100 p-4 rounded-2xl">
+                            <TrendingUp className="text-emerald-600" size={24} />
                         </div>
                     </div>
                 </div>
             </div>
 
             {/* Recent Activity */}
-            <div className="bg-white rounded-lg shadow p-6">
-                <h2 className="text-xl font-bold text-gray-900 mb-4">Recent Activity</h2>
-                <div className="space-y-4">
-                    <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
-                        <div className="flex items-center gap-3">
-                            <div className="bg-blue-100 p-2 rounded-full">
+            <div className="bg-white rounded-2xl premium-shadow p-6 md:p-8">
+                <div className="flex justify-between items-center mb-6">
+                    <h2 className="text-xl font-bold text-slate-800 tracking-tight">Recent Activity</h2>
+                    <button className="text-sm font-medium text-sky-600 hover:text-sky-700 transition-colors">View All</button>
+                </div>
+                
+                <div className="space-y-3">
+                    <div className="flex items-center justify-between p-4 bg-slate-50/50 border border-slate-100 rounded-2xl hover:bg-slate-50 transition-colors group">
+                        <div className="flex items-center gap-4">
+                            <div className="bg-blue-100/50 p-2.5 rounded-xl border border-blue-100">
                                 <Image className="text-blue-600" size={20} />
                             </div>
                             <div>
-                                <p className="font-medium text-gray-900">New fundus scan uploaded</p>
-                                <p className="text-sm text-gray-600">Patient: John Doe • 5 minutes ago</p>
+                                <p className="font-semibold text-slate-800">New fundus scan uploaded</p>
+                                <p className="text-sm text-slate-500 font-medium">Patient: John Doe • <span className="text-slate-400">5 minutes ago</span></p>
                             </div>
                         </div>
                         <button
                             onClick={() => navigate('/analysis')}
-                            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+                            className="px-5 py-2.5 bg-sky-600 text-white font-medium text-sm rounded-xl hover:bg-sky-700 transition-all duration-200 transform active:scale-95 shadow-sm shadow-sky-600/20"
                         >
                             Analyze
                         </button>
                     </div>
 
-                    <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
-                        <div className="flex items-center gap-3">
-                            <div className="bg-green-100 p-2 rounded-full">
-                                <Activity className="text-green-600" size={20} />
+                    <div className="flex items-center justify-between p-4 bg-slate-50/50 border border-slate-100 rounded-2xl hover:bg-slate-50 transition-colors group">
+                        <div className="flex items-center gap-4">
+                            <div className="bg-emerald-100/50 p-2.5 rounded-xl border border-emerald-100">
+                                <Activity className="text-emerald-600" size={20} />
                             </div>
                             <div>
-                                <p className="font-medium text-gray-900">AI analysis completed</p>
-                                <p className="text-sm text-gray-600">Patient: Jane Smith • 15 minutes ago</p>
+                                <p className="font-semibold text-slate-800">AI analysis completed</p>
+                                <p className="text-sm text-slate-500 font-medium">Patient: Jane Smith • <span className="text-slate-400">15 minutes ago</span></p>
                             </div>
                         </div>
                         <button
                             onClick={() => navigate('/patients')}
-                            className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300"
+                            className="px-5 py-2.5 bg-white border border-slate-200 text-slate-700 font-medium text-sm rounded-xl hover:bg-slate-50 hover:border-slate-300 transition-all duration-200 transform active:scale-95"
                         >
-                            View
+                            View Results
                         </button>
                     </div>
 
-                    <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
-                        <div className="flex items-center gap-3">
-                            <div className="bg-purple-100 p-2 rounded-full">
+                    <div className="flex items-center justify-between p-4 bg-slate-50/50 border border-slate-100 rounded-2xl hover:bg-slate-50 transition-colors group">
+                        <div className="flex items-center gap-4">
+                            <div className="bg-purple-100/50 p-2.5 rounded-xl border border-purple-100">
                                 <Users className="text-purple-600" size={20} />
                             </div>
                             <div>
-                                <p className="font-medium text-gray-900">New patient registered</p>
-                                <p className="text-sm text-gray-600">Patient: Bob Wilson • 1 hour ago</p>
+                                <p className="font-semibold text-slate-800">New patient registered</p>
+                                <p className="text-sm text-slate-500 font-medium">Patient: Bob Wilson • <span className="text-slate-400">1 hour ago</span></p>
                             </div>
                         </div>
                         <button
                             onClick={() => navigate('/patients')}
-                            className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300"
+                            className="px-5 py-2.5 bg-white border border-slate-200 text-slate-700 font-medium text-sm rounded-xl hover:bg-slate-50 hover:border-slate-300 transition-all duration-200 transform active:scale-95"
                         >
-                            View
+                            View Profile
                         </button>
                     </div>
                 </div>

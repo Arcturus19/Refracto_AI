@@ -7,6 +7,7 @@ import {
 import { useSearchParams } from 'react-router-dom'
 import { mlService, analyzeScan, AnalysisResult } from '../services/api'
 import PrescriptionCard from '../components/PrescriptionCard'
+import { generateDicomPreview } from '../utils/dicomParser'
 
 // ─── Heatmap Modal ────────────────────────────────────────────────────────────
 function HeatmapModal({ heatmap, explanation, onClose }: { heatmap: string; explanation: string; onClose: () => void }) {
@@ -69,6 +70,7 @@ export default function AnalysisPage() {
     const [isAnalyzing, setIsAnalyzing] = useState(false)
     const [results, setResults] = useState<AnalysisResult | null>(null)
     const [error, setError] = useState<string | null>(null)
+    const [isGeneratingPreview, setIsGeneratingPreview] = useState(false)
 
     // Refractive Input State
     const [manualSphere, setManualSphere] = useState<string>('')
@@ -104,7 +106,18 @@ export default function AnalysisPage() {
             const url = URL.createObjectURL(file)
             setPreviewUrl(url)
         } else {
-            setPreviewUrl(null)
+            setIsGeneratingPreview(true)
+            generateDicomPreview(file)
+                .then(url => {
+                    setPreviewUrl(url)
+                })
+                .catch(err => {
+                    console.error("DICOM preview generation failed:", err)
+                    setPreviewUrl(null)
+                })
+                .finally(() => {
+                    setIsGeneratingPreview(false)
+                })
         }
     }, [])
 
@@ -188,24 +201,24 @@ export default function AnalysisPage() {
                 {/* Drop zone */}
                 {!selectedFile ? (
                     <div
-                        className={`flex-1 min-h-72 border-2 border-dashed rounded-2xl flex flex-col items-center justify-center gap-4 p-8 text-center
-              transition-all cursor-pointer select-none
-              ${isDragging ? 'border-sky-500 bg-sky-50 scale-[1.01]' : 'border-slate-300 bg-slate-50 hover:border-sky-400 hover:bg-sky-50/50'}`}
+                        className={`flex-1 min-h-72 border-2 border-dashed rounded-3xl flex flex-col items-center justify-center gap-5 p-8 text-center
+              transition-all duration-300 cursor-pointer select-none group
+              ${isDragging ? 'border-sky-500 bg-sky-50/80 scale-[1.02] shadow-xl shadow-sky-100' : 'border-slate-300 bg-slate-50 hover:border-sky-400 hover:bg-sky-50/50 hover:shadow-lg hover:-translate-y-1'}`}
                         onDragOver={e => { e.preventDefault(); setIsDragging(true) }}
                         onDragLeave={() => setIsDragging(false)}
                         onDrop={handleDrop}
                         onClick={() => fileInputRef.current?.click()}
                     >
-                        <div className={`p-5 rounded-2xl ${isDragging ? 'bg-sky-200' : 'bg-sky-100'} transition-colors`}>
-                            <Upload className="text-sky-600" size={36} />
+                        <div className={`p-5 rounded-2xl transition-all duration-300 ${isDragging ? 'bg-sky-200' : 'bg-white shadow-sm group-hover:scale-110 group-hover:bg-sky-100 group-hover:shadow-md'}`}>
+                            <Upload className={`${isDragging ? 'text-sky-700' : 'text-sky-500'}`} size={36} />
                         </div>
                         <div>
-                            <p className="text-lg font-semibold text-slate-700 mb-1">Drop your medical scan here</p>
-                            <p className="text-sm text-slate-500">Fundus, OCT, or DICOM (.dcm) — or click to browse</p>
+                            <p className="text-xl font-bold text-slate-800 mb-2">Drop your medical scan here</p>
+                            <p className="text-sm font-medium text-slate-500">Fundus, OCT, or DICOM (.dcm) — or click to browse</p>
                         </div>
-                        <div className="flex flex-wrap justify-center gap-2">
+                        <div className="flex flex-wrap justify-center gap-2 mt-2">
                             {['JPEG', 'PNG', 'TIFF', 'DICOM'].map(t => (
-                                <span key={t} className="text-xs bg-white border border-slate-200 text-slate-500 px-2.5 py-1 rounded-full">{t}</span>
+                                <span key={t} className="text-xs bg-white border border-slate-200 text-slate-600 font-semibold px-3 py-1.5 rounded-full shadow-sm">{t}</span>
                             ))}
                         </div>
                     </div>
@@ -213,7 +226,12 @@ export default function AnalysisPage() {
                     <div className="flex flex-col gap-4">
                         {/* Image preview */}
                         <div className="relative bg-slate-900 rounded-2xl overflow-hidden aspect-square w-full flex items-center justify-center">
-                            {previewUrl ? (
+                            {isGeneratingPreview ? (
+                                <div className="flex flex-col items-center gap-3 text-slate-400">
+                                    <Loader2 size={48} className="animate-spin text-sky-500" />
+                                    <span className="text-sm">Generating DICOM preview...</span>
+                                </div>
+                            ) : previewUrl ? (
                                 <img src={previewUrl} alt="Selected scan" className="w-full h-full object-contain" />
                             ) : (
                                 <div className="flex flex-col items-center gap-3 text-slate-400">
@@ -233,12 +251,12 @@ export default function AnalysisPage() {
                         </div>
 
                         {/* Refractive Data Inputs */}
-                        <div className="bg-slate-50 border border-slate-200 rounded-xl p-3 flex flex-col gap-2">
-                            <span className="text-sm font-semibold text-slate-700">Optional: Manual Refractive Data</span>
-                            <div className="flex gap-2">
-                                <input type="number" step="0.25" placeholder="Sphere (D)" value={manualSphere} onChange={e => setManualSphere(e.target.value)} className="flex-1 w-0 px-2 py-1.5 text-sm rounded border border-slate-300 focus:outline-none focus:border-sky-500" />
-                                <input type="number" step="0.25" placeholder="Cylinder (D)" value={manualCylinder} onChange={e => setManualCylinder(e.target.value)} className="flex-1 w-0 px-2 py-1.5 text-sm rounded border border-slate-300 focus:outline-none focus:border-sky-500" />
-                                <input type="number" step="1" placeholder="Axis (°)" value={manualAxis} onChange={e => setManualAxis(e.target.value)} className="flex-1 w-0 px-2 py-1.5 text-sm rounded border border-slate-300 focus:outline-none focus:border-sky-500" />
+                        <div className="bg-slate-50/80 border border-slate-200/80 rounded-2xl p-5 flex flex-col gap-3">
+                            <span className="text-sm font-bold text-slate-700">Optional: Manual Refractive Data</span>
+                            <div className="flex gap-3">
+                                <input type="number" step="0.25" placeholder="Sphere (D)" value={manualSphere} onChange={e => setManualSphere(e.target.value)} className="flex-1 w-0 px-3 py-2.5 text-sm font-medium rounded-xl border border-slate-200 focus:outline-none focus:ring-4 focus:ring-sky-500/10 focus:border-sky-500 transition-all shadow-sm" />
+                                <input type="number" step="0.25" placeholder="Cylinder (D)" value={manualCylinder} onChange={e => setManualCylinder(e.target.value)} className="flex-1 w-0 px-3 py-2.5 text-sm font-medium rounded-xl border border-slate-200 focus:outline-none focus:ring-4 focus:ring-sky-500/10 focus:border-sky-500 transition-all shadow-sm" />
+                                <input type="number" step="1" placeholder="Axis (°)" value={manualAxis} onChange={e => setManualAxis(e.target.value)} className="flex-1 w-0 px-3 py-2.5 text-sm font-medium rounded-xl border border-slate-200 focus:outline-none focus:ring-4 focus:ring-sky-500/10 focus:border-sky-500 transition-all shadow-sm" />
                             </div>
                         </div>
 
@@ -247,27 +265,27 @@ export default function AnalysisPage() {
                             <button
                                 onClick={handleAnalyze}
                                 disabled={isAnalyzing}
-                                className="flex-1 bg-sky-600 hover:bg-sky-700 disabled:opacity-60 text-white font-semibold py-3 rounded-xl flex items-center justify-center gap-2 shadow-lg shadow-sky-200 transition-all"
+                                className="flex-1 bg-sky-600 hover:bg-sky-700 disabled:opacity-60 disabled:hover:translate-y-0 text-white font-bold py-3.5 rounded-2xl flex items-center justify-center gap-2 shadow-lg shadow-sky-600/20 active:scale-[0.98] transition-all duration-300 hover:-translate-y-1"
                             >
                                 {isAnalyzing ? <Loader2 size={20} className="animate-spin" /> : <Sparkles size={20} />}
-                                {isAnalyzing ? 'Analyzing…' : 'Run AI Analysis'}
+                                {isAnalyzing ? 'Analyzing Data…' : 'Run AI Analysis'}
                             </button>
 
                             {results && (
                                 <button
                                     onClick={handleExplain}
                                     disabled={isLoadingHeatmap}
-                                    className="flex items-center gap-2 px-4 py-3 border border-indigo-300 text-indigo-700 hover:bg-indigo-50 disabled:opacity-60 rounded-xl font-medium text-sm transition-colors"
+                                    className="flex items-center gap-2 px-5 py-3.5 border border-indigo-200 text-indigo-700 hover:bg-indigo-50 disabled:opacity-60 rounded-2xl font-bold text-sm transition-all shadow-sm hover:shadow-md hover:-translate-y-1 active:scale-[0.98]"
                                 >
-                                    {isLoadingHeatmap ? <Loader2 size={16} className="animate-spin" /> : <Brain size={16} />}
+                                    {isLoadingHeatmap ? <Loader2 size={18} className="animate-spin" /> : <Brain size={18} />}
                                     Grad-CAM
                                 </button>
                             )}
                         </div>
 
                         {error && (
-                            <div className="flex gap-2 p-3 bg-red-50 border border-red-200 rounded-xl text-sm text-red-700">
-                                <AlertTriangle size={16} className="flex-shrink-0 mt-0.5 text-red-500" />
+                            <div className="flex gap-3 p-4 bg-rose-50 border border-rose-200 rounded-2xl text-sm font-medium text-rose-700 shadow-sm animate-fade-in">
+                                <AlertTriangle size={18} className="flex-shrink-0 mt-0.5 text-rose-500" />
                                 {error}
                             </div>
                         )}
@@ -329,19 +347,21 @@ export default function AnalysisPage() {
                 {results && (
                     <div className="flex flex-col gap-4">
                         {/* Header */}
-                        <div className="flex items-center justify-between">
+                        <div className="flex items-center justify-between bg-white px-5 py-3 rounded-2xl border border-slate-200 premium-shadow">
                             <h2 className="text-xl font-bold text-slate-800">AI Findings</h2>
-                            <span className="text-xs font-semibold text-emerald-600 bg-emerald-50 border border-emerald-200 px-3 py-1 rounded-full flex items-center gap-1">
-                                <CheckCircle size={12} />
+                            <span className="text-xs font-bold text-emerald-600 bg-emerald-50 border border-emerald-100 px-3 py-1.5 rounded-full flex items-center gap-1.5 shadow-sm">
+                                <CheckCircle size={14} />
                                 Analysis Complete
                             </span>
                         </div>
 
                         {/* Refraction Card */}
-                        <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm">
-                            <div className="flex items-center gap-2 mb-4">
-                                <Eye size={18} className="text-sky-600" />
-                                <h3 className="font-semibold text-slate-700">Refractive Error Estimate</h3>
+                        <div className="bg-white rounded-3xl p-6 premium-shadow transition-all duration-300 hover:-translate-y-1">
+                            <div className="flex items-center gap-3 mb-5">
+                                <div className="p-2 bg-sky-50 rounded-xl">
+                                    <Eye size={20} className="text-sky-600" />
+                                </div>
+                                <h3 className="font-bold text-slate-800 tracking-tight">Refractive Error Estimate</h3>
                             </div>
                             <div className="grid grid-cols-3 gap-3">
                                 {[
@@ -359,10 +379,12 @@ export default function AnalysisPage() {
                         </div>
 
                         {/* Pathology Cards */}
-                        <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm">
-                            <div className="flex items-center gap-2 mb-4">
-                                <Activity size={18} className="text-violet-600" />
-                                <h3 className="font-semibold text-slate-700">Pathology Detection</h3>
+                        <div className="bg-white rounded-3xl p-6 premium-shadow transition-all duration-300 hover:-translate-y-1">
+                            <div className="flex items-center gap-3 mb-5">
+                                <div className="p-2 bg-violet-50 rounded-xl">
+                                    <Activity size={20} className="text-violet-600" />
+                                </div>
+                                <h3 className="font-bold text-slate-800 tracking-tight">Pathology Detection</h3>
                             </div>
                             <div className="space-y-3">
                                 {[

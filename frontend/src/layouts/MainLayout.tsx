@@ -6,7 +6,7 @@ export default function MainLayout({ children }: { children: React.ReactNode }) 
   const [isSidebarOpen, setIsSidebarOpen] = useState(false)
 
   return (
-    <div className="min-h-screen bg-slate-50">
+    <div className="min-h-screen bg-slate-50 text-slate-800 font-sans">
       <Sidebar
         isOpen={isSidebarOpen}
         onClose={() => setIsSidebarOpen(false)}
@@ -18,7 +18,7 @@ export default function MainLayout({ children }: { children: React.ReactNode }) 
 
       {/* Main Content Area */}
       <main className="lg:pl-64 pt-16 min-h-screen transition-all duration-300">
-        <div className="p-6 max-w-7xl mx-auto">
+        <div className="p-6 max-w-7xl mx-auto animate-fade-in">
           {children}
         </div>
       </main>

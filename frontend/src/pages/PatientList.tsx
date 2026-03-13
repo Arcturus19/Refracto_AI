@@ -101,7 +101,7 @@ export default function PatientList() {
         {
             header: 'Name',
             accessor: 'full_name',
-            render: (row: Patient) => <span className="font-semibold text-slate-900">{row.full_name}</span>
+            render: (row: Patient) => <span className="font-semibold text-slate-800">{row.full_name}</span>
         },
         {
             header: 'Age',
@@ -133,45 +133,47 @@ export default function PatientList() {
             header: 'Actions',
             accessor: 'actions',
             render: (row: Patient) => (
-                <button
-                    className="text-sky-600 hover:text-sky-700 hover:bg-sky-50 p-2 rounded-full transition-colors"
-                    title="View Details"
-                    onClick={(e) => {
-                        e.stopPropagation()
-                        console.log('View patient:', row.id)
-                    }}
-                >
-                    <Eye size={18} />
-                </button>
+                <div className="flex justify-end pr-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+                    <button
+                        className="text-sky-600 hover:text-sky-700 bg-white hover:bg-sky-50 p-2 rounded-xl shadow-sm border border-slate-200 transition-all hover:scale-105 active:scale-95"
+                        title="View Details"
+                        onClick={(e) => {
+                            e.stopPropagation()
+                            console.log('View patient:', row.id)
+                        }}
+                    >
+                        <Eye size={18} />
+                    </button>
+                </div>
             )
         }
     ]
 
     return (
-        <div className="space-y-6">
+        <div className="space-y-6 max-w-7xl mx-auto">
             {/* Header & Controls */}
-            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-8">
                 <div>
-                    <h2 className="text-2xl font-bold text-slate-800">Patient Registry</h2>
-                    <p className="text-slate-500 text-sm">
-                        Manage patient records and viewing history
-                        {!isLoading && <span className="ml-2 text-sky-600 font-medium">({patients.length} patients)</span>}
+                    <h2 className="text-3xl font-bold text-slate-900 tracking-tight">Patient Registry</h2>
+                    <p className="text-slate-500 font-medium mt-1">
+                        Manage patient records & viewing history
+                        {!isLoading && <span className="ml-2 text-sky-600 bg-sky-50 px-2 py-0.5 rounded-full text-xs">{patients.length} total</span>}
                     </p>
                 </div>
 
-                <div className="flex gap-2">
+                <div className="flex gap-3">
                     <button
                         onClick={() => fetchPatients(searchQuery || undefined)}
-                        className="bg-white hover:bg-slate-50 text-slate-700 px-4 py-2.5 rounded-lg flex items-center gap-2 font-medium border border-slate-200 transition-all hover:scale-105 active:scale-95"
+                        className="bg-white hover:bg-slate-50 text-slate-700 px-5 py-2.5 rounded-xl flex items-center gap-2 font-medium border border-slate-200 transition-all duration-200 hover:-translate-y-0.5 shadow-sm"
                         title="Refresh patient list"
                     >
-                        <RefreshCw size={18} />
+                        <RefreshCw size={18} className={isLoading ? 'animate-spin' : ''} />
                         Refresh
                     </button>
 
                     <button
                         onClick={() => setIsModalOpen(true)}
-                        className="bg-sky-600 hover:bg-sky-700 text-white px-5 py-2.5 rounded-lg flex items-center gap-2 font-medium shadow-lg shadow-sky-200 transition-all hover:scale-105 active:scale-95"
+                        className="bg-sky-600 hover:bg-sky-700 text-white px-5 py-2.5 rounded-xl flex items-center gap-2 font-medium shadow-sm shadow-sky-200 transition-all duration-200 hover:-translate-y-0.5"
                     >
                         <Plus size={20} />
                         Add New Patient
@@ -191,19 +193,19 @@ export default function PatientList() {
             )}
 
             {/* Filter Bar */}
-            <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex flex-col sm:flex-row gap-4">
+            <div className="bg-white p-2 sm:p-3 rounded-2xl border border-slate-200 shadow-sm flex flex-col sm:flex-row gap-3">
                 <div className="relative flex-1">
-                    <Search size={20} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                    <Search size={20} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
                     <input
                         type="text"
-                        placeholder="Search by Name..."
-                        className="w-full pl-10 pr-4 py-2 rounded-lg border border-slate-200 focus:border-sky-500 focus:ring-2 focus:ring-sky-100 outline-none transition-all"
+                        placeholder="Search by patient name or ID..."
+                        className="w-full pl-12 pr-4 py-2.5 bg-slate-50/50 hover:bg-slate-50 rounded-xl border border-transparent focus:bg-white focus:border-sky-500 focus:ring-4 focus:ring-sky-500/10 outline-none transition-all text-slate-700 placeholder:text-slate-400"
                         value={searchQuery}
                         onChange={(e) => setSearchQuery(e.target.value)}
                         disabled={isLoading}
                     />
                 </div>
-                <button className="flex items-center gap-2 px-4 py-2 border border-slate-200 rounded-lg text-slate-600 hover:bg-slate-50 font-medium">
+                <button className="flex items-center justify-center gap-2 px-6 py-2.5 border border-slate-200 rounded-xl text-slate-600 hover:bg-slate-50 hover:text-slate-900 font-medium transition-colors">
                     <Filter size={18} />
                     Filters
                 </button>
@@ -211,9 +213,9 @@ export default function PatientList() {
 
             {/* Loading State */}
             {isLoading && (
-                <div className="bg-white rounded-xl border border-slate-200 p-12 text-center">
-                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-sky-600 mx-auto mb-4"></div>
-                    <p className="text-slate-600 font-medium">Loading patients...</p>
+                <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-16 text-center animate-pulse">
+                    <div className="w-12 h-12 rounded-full border-4 border-slate-100 border-t-sky-500 animate-spin mx-auto mb-4"></div>
+                    <p className="text-slate-500 font-medium">Loading patient records...</p>
                 </div>
             )}
 

@@ -17,6 +17,7 @@ interface ClinicalConcordancePanelProps {
     refraction: { sphere: number; cylinder: number; axis: number };
   };
   onSubmitReview?: (review: ClinicalConcordanceReview) => Promise<void>;
+  onReviewSubmitted?: (review: ClinicalConcordanceReview) => Promise<void>;
 }
 
 /**
@@ -35,7 +36,8 @@ interface ClinicalConcordancePanelProps {
 export const ClinicalConcordancePanel: React.FC<ClinicalConcordancePanelProps> = ({
   patientId,
   predictions,
-  onSubmitReview
+  onSubmitReview,
+  onReviewSubmitted,
 }) => {
   const [review, setReview] = useState<ClinicalConcordanceReview>({
     dr_assessment: null,
@@ -47,29 +49,35 @@ export const ClinicalConcordancePanel: React.FC<ClinicalConcordancePanelProps> =
 
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
+  const [formError, setFormError] = useState<string | null>(null);
+  const [submitError, setSubmitError] = useState<string | null>(null);
 
   const handleScaleChange = (field: 'dr_assessment' | 'glaucoma_assessment' | 'refraction_assessment', value: number) => {
     setReview(prev => ({ ...prev, [field]: value }));
+    setFormError(null);
   };
 
   const handleSubmit = async () => {
     if (!review.dr_assessment || !review.glaucoma_assessment || !review.refraction_assessment) {
-      alert('Please rate all three assessments');
+      setFormError('Please rate all three assessments before submitting.');
       return;
     }
 
     if (!review.clinician_id) {
-      alert('Please validate your clinician ID');
+      setFormError('Please enter your clinician identifier.');
       return;
     }
 
     setSubmitting(true);
+    setSubmitError(null);
     try {
-      if (onSubmitReview) {
+      if (onReviewSubmitted) {
+        await onReviewSubmitted(review);
+      } else if (onSubmitReview) {
         await onSubmitReview(review);
       } else {
         // Default API call
-        const response = await fetch('/api/clinical/concordance/submit', {
+        const response = await fetch('/api/ml/expert-review/submit', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -79,11 +87,13 @@ export const ClinicalConcordancePanel: React.FC<ClinicalConcordancePanelProps> =
         });
         
         if (!response.ok) throw new Error('Submission failed');
+        const data = await response.json();
+        if (data.success === false) throw new Error(data.error || 'Submission failed');
       }
       setSubmitted(true);
       setTimeout(() => setSubmitted(false), 3000);
-    } catch (error) {
-      alert('Failed to submit review');
+    } catch (err) {
+      setSubmitError(err instanceof Error ? err.message : 'Failed to submit review');
     } finally {
       setSubmitting(false);
     }
@@ -108,7 +118,7 @@ export const ClinicalConcordancePanel: React.FC<ClinicalConcordancePanelProps> =
               onClick={() => onChange(option.score)}
               className={`flex-1 py-2 px-1 rounded font-bold transition ${
                 value === option.score
-                  ? `${option.color} text-white`
+                  ? `${option.color} bg-blue-500 bg-green-500 text-white selected`
                   : 'bg-white border-2 border-gray-300 hover:border-gray-400 text-gray-600'
               }`}
               title={option.label}
@@ -145,6 +155,15 @@ export const ClinicalConcordancePanel: React.FC<ClinicalConcordancePanelProps> =
         </div>
       </div>
 
+      {/* Scale Legend */}
+      <div className="mb-4 flex justify-between text-xs text-gray-500">
+        <span>1 Strongly Disagree</span>
+        <span>2 Disagree</span>
+        <span>3 Neutral</span>
+        <span>4 Agree</span>
+        <span>5 Strongly Agree</span>
+      </div>
+
       {/* Likert Scales */}
       <div className="mb-6 space-y-4">
         <div className="text-sm font-semibold text-gray-700 mb-4">
@@ -169,6 +188,13 @@ export const ClinicalConcordancePanel: React.FC<ClinicalConcordancePanelProps> =
           onChange={(v) => handleScaleChange('refraction_assessment', v)}
         />
       </div>
+
+      {/* Form Error */}
+      {formError && (
+        <div className="mb-4 p-3 bg-red-100 border border-red-300 rounded text-red-700" role="alert">
+          {formError}
+        </div>
+      )}
 
       {/* Clinical Notes */}
       <div className="mb-6">
@@ -209,10 +235,17 @@ export const ClinicalConcordancePanel: React.FC<ClinicalConcordancePanelProps> =
         </div>
       </div>
 
+      {/* Submit Error */}
+      {submitError && (
+        <div className="mb-4 p-3 bg-red-100 border border-red-300 rounded text-red-700" role="alert">
+          {submitError}
+        </div>
+      )}
+
       {/* Submit Button */}
       {submitted && (
         <div className="mb-4 p-3 bg-green-100 border border-green-300 rounded text-green-700 flex items-center gap-2">
-          <span>✓ Review submitted successfully</span>
+          <span>✓ Review submitted successfully. Thank you!</span>
         </div>
       )}
 

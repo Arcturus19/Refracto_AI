@@ -2,7 +2,7 @@ import React, { useState, useCallback, useRef } from 'react'
 import {
     Upload, Loader2, Brain, Eye, Activity, AlertTriangle,
     CheckCircle, FileText, Zap, ChevronDown, ChevronUp,
-    X, Image as ImageIcon, Sparkles
+    X, Image as ImageIcon, Sparkles, Printer
 } from 'lucide-react'
 import { useSearchParams } from 'react-router-dom'
 import { mlService, analyzeScan, AnalysisResult } from '../services/api'
@@ -70,6 +70,11 @@ export default function AnalysisPage() {
     const [results, setResults] = useState<AnalysisResult | null>(null)
     const [error, setError] = useState<string | null>(null)
 
+    // Refractive Input State
+    const [manualSphere, setManualSphere] = useState<string>('')
+    const [manualCylinder, setManualCylinder] = useState<string>('')
+    const [manualAxis, setManualAxis] = useState<string>('')
+
     // XAI / Heatmap state
     const [heatmapData, setHeatmapData] = useState<{ image: string; explanation: string } | null>(null)
     const [isLoadingHeatmap, setIsLoadingHeatmap] = useState(false)
@@ -127,7 +132,14 @@ export default function AnalysisPage() {
         setHeatmapData(null)
         setShowPrescription(false)
         try {
-            const data = await analyzeScan(selectedFile, patientId)
+            const parsedSphere = parseFloat(manualSphere)
+            const parsedCylinder = parseFloat(manualCylinder)
+            const parsedAxis = parseFloat(manualAxis)
+            const manualData = (!isNaN(parsedSphere) && !isNaN(parsedCylinder) && !isNaN(parsedAxis)) 
+                ? { sphere: parsedSphere, cylinder: parsedCylinder, axis: parsedAxis } 
+                : undefined;
+
+            const data = await analyzeScan(selectedFile, patientId, manualData)
             setResults(data)
         } catch (err: any) {
             setError(err.message || 'Analysis failed. Is the ML service running?')
@@ -157,10 +169,10 @@ export default function AnalysisPage() {
     const isDicomFile = selectedFile?.name.toLowerCase().endsWith('.dcm') || selectedFile?.name.toLowerCase().endsWith('.dicom')
 
     return (
-        <div className="min-h-[calc(100vh-6rem)] flex flex-col lg:flex-row gap-6">
+        <div className="min-h-[calc(100vh-6rem)] flex flex-col lg:flex-row gap-6 print:block print:w-full">
 
             {/* ── Left Panel: Upload ─────────────────────────────────────── */}
-            <div className="lg:w-1/2 flex flex-col gap-4">
+            <div className="lg:w-1/2 flex flex-col gap-4 print:hidden">
                 <div className="flex items-center justify-between">
                     <h2 className="text-xl font-bold text-slate-800 flex items-center gap-2">
                         <Activity size={22} className="text-sky-600" />
@@ -217,6 +229,16 @@ export default function AnalysisPage() {
                             </button>
                             <div className="absolute bottom-3 left-3 bg-black/50 backdrop-blur-sm text-white text-xs px-3 py-1.5 rounded-full">
                                 {isDicomFile ? '🩻 DICOM' : '🖼️ Image'} · {selectedFile.name.length > 28 ? selectedFile.name.slice(0, 25) + '…' : selectedFile.name}
+                            </div>
+                        </div>
+
+                        {/* Refractive Data Inputs */}
+                        <div className="bg-slate-50 border border-slate-200 rounded-xl p-3 flex flex-col gap-2">
+                            <span className="text-sm font-semibold text-slate-700">Optional: Manual Refractive Data</span>
+                            <div className="flex gap-2">
+                                <input type="number" step="0.25" placeholder="Sphere (D)" value={manualSphere} onChange={e => setManualSphere(e.target.value)} className="flex-1 w-0 px-2 py-1.5 text-sm rounded border border-slate-300 focus:outline-none focus:border-sky-500" />
+                                <input type="number" step="0.25" placeholder="Cylinder (D)" value={manualCylinder} onChange={e => setManualCylinder(e.target.value)} className="flex-1 w-0 px-2 py-1.5 text-sm rounded border border-slate-300 focus:outline-none focus:border-sky-500" />
+                                <input type="number" step="1" placeholder="Axis (°)" value={manualAxis} onChange={e => setManualAxis(e.target.value)} className="flex-1 w-0 px-2 py-1.5 text-sm rounded border border-slate-300 focus:outline-none focus:border-sky-500" />
                             </div>
                         </div>
 
@@ -280,7 +302,7 @@ export default function AnalysisPage() {
             </div>
 
             {/* ── Right Panel: Results ────────────────────────────────────── */}
-            <div className="lg:w-1/2 flex flex-col gap-4">
+            <div className="lg:w-1/2 flex flex-col gap-4 print:w-full print:block">
                 {!results && !isAnalyzing && (
                     <div className="flex-1 flex flex-col items-center justify-center text-center p-8 border-2 border-dashed border-slate-200 rounded-2xl bg-slate-50/50 min-h-72">
                         <div className="w-16 h-16 bg-gradient-to-br from-sky-100 to-indigo-100 rounded-full flex items-center justify-center mb-4">
@@ -390,9 +412,9 @@ export default function AnalysisPage() {
                             />
                         )}
 
-                        {/* Grad-CAM button (inline alternative) */}
+                        {/* Grad-CAM button & Print Button */}
                         {!results && null}
-                        <div className="flex gap-2">
+                        <div className="flex gap-2 print:hidden">
                             <button
                                 onClick={handleExplain}
                                 disabled={isLoadingHeatmap}
@@ -400,6 +422,12 @@ export default function AnalysisPage() {
                             >
                                 {isLoadingHeatmap ? <Loader2 size={16} className="animate-spin" /> : <Zap size={16} />}
                                 {isLoadingHeatmap ? 'Generating heatmap…' : 'View Grad-CAM XAI'}
+                            </button>
+                            <button
+                                onClick={() => window.print()}
+                                className="flex-1 flex items-center justify-center gap-2 bg-slate-800 text-white hover:bg-slate-700 py-2.5 rounded-xl text-sm font-medium transition-colors shadow-lg shadow-slate-200"
+                            >
+                                <Printer size={16} /> Print Clinical Report
                             </button>
                         </div>
                     </div>

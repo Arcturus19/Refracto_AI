@@ -19,10 +19,10 @@ from schemas import ImageUploadResponse, ImageRecordResponse, ImageListResponse,
 from minio_handler import get_minio_handler
 from config import settings
 import logging
-
-# Configure logging
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
+import pydicom
+import numpy as np
+from PIL import Image
+import io
 
 
 # ============ Database Initialization ============
@@ -191,11 +191,70 @@ async def upload_image(
         
         # Step B: Upload to MinIO
         minio = get_minio_handler()
+        
+        # === NEW: DICOM Conversion Logic ===
+        final_file_content = file_content
+        final_content_type = file.content_type
+        final_file_extension = file_extension
+        final_file_name = file.filename or f"upload_{unique_id}.{file_extension}"
+        
+        if file_extension in ['dcm', 'dicom'] or final_image_type == ImageType.OCT:
+            try:
+                logger.info(f"Converting DICOM to PNG for {file.filename}")
+                # Read DICOM using pydicom
+                dicom_data = pydicom.dcmread(io.BytesIO(file_content))
+                
+                # Extract pixel array
+                if hasattr(dicom_data, 'pixel_array'):
+                    img_array = dicom_data.pixel_array
+                    
+                    # Normalize if needed (e.g., 16-bit to 8-bit)
+                    if img_array.dtype != np.uint8:
+                        # Rescale to 0-255
+                        min_val = np.min(img_array)
+                        max_val = np.max(img_array)
+                        if max_val > min_val:
+                            img_array = ((img_array - min_val) / (max_val - min_val) * 255.0).astype(np.uint8)
+                        else:
+                            img_array = np.zeros_like(img_array, dtype=np.uint8)
+                    
+                    # Ensure it's 2D or 3D
+                    if len(img_array.shape) > 2 and img_array.shape[2] not in [1, 3, 4]:
+                        # Handle multi-frame by just taking the first frame
+                        if len(img_array.shape) == 3:
+                            img_array = img_array[0]
+                        elif len(img_array.shape) == 4:
+                            img_array = img_array[0, :, :, :3]
+                            
+                    image = Image.fromarray(img_array)
+                    
+                    # Convert to PNG byte stream
+                    png_io = io.BytesIO()
+                    image.save(png_io, format='PNG')
+                    final_file_content = png_io.getvalue()
+                    
+                    # Update metadata for storage
+                    final_content_type = 'image/png'
+                    final_file_extension = 'png'
+                    final_file_name = f"{file.filename.rsplit('.', 1)[0]}.png"
+                    file_size = len(final_file_content)
+                    
+                    # Update object_name
+                    object_name = f"patients/{patient_id}/{final_image_type.value.lower()}/{timestamp}_{unique_id}.png"
+                    logger.info(f"DICOM successfully converted to {file_size} bytes PNG.")
+                else:
+                    logger.warning("DICOM has no pixel_array, skipping conversion.")
+            except Exception as dicom_err:
+                logger.error(f"DICOM conversion failed: {dicom_err}")
+                # Fall back to original file if conversion fails
+                pass
+        # === END DICOM Conversion ===
+
         upload_success = minio.upload_file(
-            file_data=file_content,
+            file_data=final_file_content,
             bucket_name=settings.MINIO_BUCKET,
             object_name=object_name,
-            content_type=file.content_type
+            content_type=final_content_type
         )
         
         if not upload_success:
@@ -209,9 +268,9 @@ async def upload_image(
             patient_id=patient_id,
             image_type=final_image_type,
             file_path=object_name,
-            file_name=file.filename or f"upload_{unique_id}.{file_extension}",
+            file_name=final_file_name,
             file_size=file_size,
-            content_type=file.content_type or "application/octet-stream"
+            content_type=final_content_type or "application/octet-stream"
         )
         
         db.add(image_record)

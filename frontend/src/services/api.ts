@@ -396,7 +396,8 @@ export const mlService = {
  */
 export const analyzeScan = async (
   file: File,
-  patientId?: string
+  patientId?: string,
+  manualRefractiveData?: { sphere: number; cylinder: number; axis: number }
 ): Promise<AnalysisResult> => {
   console.log(`Analyzing scan: ${file.name}`)
 
@@ -421,13 +422,16 @@ export const analyzeScan = async (
     ])
 
     console.log('✓ ML predictions received')
+    
+    // Use manual refractive data if provided, otherwise fallback to AI prediction
+    const finalRefraction = manualRefractiveData || refractionResult;
 
     // Map ML results to AnalysisResult format
     const result: AnalysisResult = {
       refraction: {
-        sphere: refractionResult.sphere,
-        cylinder: refractionResult.cylinder,
-        axis: refractionResult.axis
+        sphere: finalRefraction.sphere,
+        cylinder: finalRefraction.cylinder,
+        axis: finalRefraction.axis
       },
       pathology: {
         diabetic_retinopathy: {
@@ -444,7 +448,7 @@ export const analyzeScan = async (
       reasoning: [
         generateDRReasoning(pathologyResult.dr_grade),
         generateGlaucomaReasoning(pathologyResult.glaucoma_risk),
-        generateRefractionReasoning(refractionResult)
+        generateRefractionReasoning(finalRefraction)
       ]
     }
 

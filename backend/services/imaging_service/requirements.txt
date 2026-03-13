@@ -16,6 +16,8 @@ minio==7.2.3
 
 # Medical Imaging
 pydicom==2.4.4
+Pillow>=10.3.0
+numpy>=1.26.4
 
 # Environment & Configuration
 python-dotenv==1.0.0

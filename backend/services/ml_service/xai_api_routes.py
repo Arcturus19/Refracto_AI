@@ -106,7 +106,7 @@ async def explain_dr_prediction(request: DRPredictionExplanationRequest):
         logger.error(f"Error generating DR explanation: {str(e)}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to generate explanation: {str(e)}"
+            detail="Failed to generate explanation"
         )
 
 
@@ -145,7 +145,7 @@ async def explain_glaucoma_prediction(request: GlaucomaPredictionExplanationRequ
         logger.error(f"Error generating glaucoma explanation: {str(e)}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to generate explanation: {str(e)}"
+            detail="Failed to generate explanation"
         )
 
 
@@ -185,7 +185,7 @@ async def explain_refraction_prediction(request: RefractionPredictionExplanation
         logger.error(f"Error generating refraction explanation: {str(e)}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to generate explanation: {str(e)}"
+            detail="Failed to generate explanation"
         )
 
 
@@ -215,7 +215,7 @@ async def get_stored_explanation(prediction_id: str):
         logger.error(f"Error retrieving explanation: {str(e)}")
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Explanation not found: {str(e)}"
+            detail="Explanation not found"
         )
 
 
@@ -428,5 +428,5 @@ async def batch_explain_predictions(predictions: List[Dict]):
         logger.error(f"Error in batch explanation: {str(e)}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Batch explanation failed: {str(e)}"
+            detail="Batch explanation failed"
         )

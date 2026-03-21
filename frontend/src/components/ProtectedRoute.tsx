@@ -8,17 +8,16 @@ interface ProtectedRouteProps {
 }
 
 export default function ProtectedRoute({ children }: ProtectedRouteProps) {
-    const { isAuthenticated, isLoading, token, checkAuth } = useAuthStore()
+    const { isAuthenticated, isLoading, hasCheckedAuth, checkAuth } = useAuthStore()
 
     useEffect(() => {
-        // If there's a stored token but we haven't validated it yet, check it
-        if (token && !isAuthenticated) {
-            checkAuth()
+        if (!hasCheckedAuth && !isLoading) {
+            void checkAuth()
         }
-    }, [token, isAuthenticated, checkAuth])
+    }, [hasCheckedAuth, isLoading, checkAuth])
 
     // Show spinner while validating token
-    if (isLoading || (token && !isAuthenticated)) {
+    if (!hasCheckedAuth || isLoading) {
         return (
             <div className="min-h-screen flex items-center justify-center bg-slate-50">
                 <div className="flex flex-col items-center gap-3">

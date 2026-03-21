@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import { CCRPanel } from '../CCRPanel';
 import { mockApiResponses, mockFetchSuccess, resetAllMocks } from '../../tests/setup';
 
@@ -39,7 +39,9 @@ describe('CCRPanel Component', () => {
     render(<CCRPanel />);
     
     await waitFor(() => {
-      expect(screen.getByText(/87|0\.87/)).toBeInTheDocument();
+      const globalLabel = screen.getByText(/^Global CCR$/i);
+      const globalCard = globalLabel.closest('div') as HTMLElement;
+      expect(within(globalCard).getByText(/87\.0\s*%/)).toBeInTheDocument();
     });
   });
 
@@ -79,7 +81,7 @@ describe('CCRPanel Component', () => {
     render(<CCRPanel />);
     
     await waitFor(() => {
-      expect(screen.getByText(/35|cases/i)).toBeInTheDocument();
+      expect(screen.getByText(/30\s+cases\s+≥\s+threshold\s+\/\s+35\s+total/i)).toBeInTheDocument();
     });
   });
 
@@ -89,7 +91,7 @@ describe('CCRPanel Component', () => {
     render(<CCRPanel />);
     
     await waitFor(() => {
-      expect(screen.getByText(/30|consensus/i)).toBeInTheDocument();
+      expect(screen.getByText(/30\s+cases\s+≥\s+threshold/i)).toBeInTheDocument();
     });
   });
 
@@ -111,9 +113,10 @@ describe('CCRPanel Component', () => {
     render(<CCRPanel showTaskBreakdown={true} />);
     
     await waitFor(() => {
-      expect(screen.getByText(/0\.89|89%/)).toBeInTheDocument(); // DR CCR
-      expect(screen.getByText(/0\.85|85%/)).toBeInTheDocument(); // Glaucoma CCR
-      expect(screen.getByText(/0\.87|87%/)).toBeInTheDocument(); // Refraction CCR
+      const section = screen.getByText(/CCR by Clinical Task/i).parentElement as HTMLElement;
+      expect(within(section).getByText(/89\s*%/)).toBeInTheDocument();
+      expect(within(section).getByText(/85\s*%/)).toBeInTheDocument();
+      expect(within(section).getByText(/87\s*%/)).toBeInTheDocument();
     });
   });
 
@@ -134,9 +137,10 @@ describe('CCRPanel Component', () => {
     render(<CCRPanel showExpertMetrics={true} />);
     
     await waitFor(() => {
-      expect(screen.getByText(/0\.90|90%/)).toBeInTheDocument(); // DR agreement
-      expect(screen.getByText(/0\.85|85%/)).toBeInTheDocument(); // Glaucoma agreement
-      expect(screen.getByText(/0\.88|88%/)).toBeInTheDocument(); // Refraction agreement
+      const section = screen.getByText(/Individual Expert Performance/i).parentElement as HTMLElement;
+      expect(within(section).getByText(/90\s*%/)).toBeInTheDocument();
+      expect(within(section).getByText(/85\s*%/)).toBeInTheDocument();
+      expect(within(section).getAllByText(/88\s*%/).length).toBeGreaterThanOrEqual(2);
     });
   });
 
@@ -157,7 +161,8 @@ describe('CCRPanel Component', () => {
     render(<CCRPanel />);
     
     await waitFor(() => {
-      expect(screen.getByText(/✓|pass|success|icon/i)).toBeInTheDocument();
+      expect(screen.getByText(/PASS/)).toBeInTheDocument();
+      expect(screen.getByText(/H3 Hypothesis VALIDATED/i)).toBeInTheDocument();
     });
   });
 
@@ -172,7 +177,8 @@ describe('CCRPanel Component', () => {
     render(<CCRPanel />);
     
     await waitFor(() => {
-      expect(screen.getByText(/✗|fail|warning|icon/i)).toBeInTheDocument();
+      expect(screen.getByText(/FAIL/)).toBeInTheDocument();
+      expect(screen.getByText(/NOT VALIDATED/i)).toBeInTheDocument();
     });
   });
 

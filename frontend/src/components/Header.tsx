@@ -12,8 +12,8 @@ export default function Header({ onMenuClick }: HeaderProps) {
     const { user, logout } = useAuthStore()
     const [dropdownOpen, setDropdownOpen] = useState(false)
 
-    const handleLogout = () => {
-        logout()
+    const handleLogout = async () => {
+        await logout()
         navigate('/login')
     }
 
@@ -40,7 +40,11 @@ export default function Header({ onMenuClick }: HeaderProps) {
             </div>
 
             <div className="flex items-center gap-4">
-                <button className="p-2 hover:bg-slate-100/50 rounded-full text-slate-500 relative transition-transform duration-200 hover:-translate-y-0.5">
+                <button
+                    onClick={() => navigate('/scans')}
+                    className="p-2 hover:bg-slate-100/50 rounded-full text-slate-500 relative transition-transform duration-200 hover:-translate-y-0.5"
+                    title="Open scans inbox"
+                >
                     <Bell size={20} />
                     <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-rose-500 rounded-full border border-white" />
                 </button>
@@ -80,7 +84,10 @@ export default function Header({ onMenuClick }: HeaderProps) {
 
                             <div className="p-1">
                                 <button
-                                    onClick={() => setDropdownOpen(false)}
+                                    onClick={() => {
+                                        setDropdownOpen(false)
+                                        navigate('/profile')
+                                    }}
                                     className="w-full flex items-center gap-3 px-4 py-2 text-sm font-medium text-slate-600 hover:bg-sky-50 hover:text-sky-600 rounded-xl transition-colors"
                                 >
                                     <User size={16} />

@@ -4,7 +4,7 @@ Run this to create the database tables
 """
 
 from database import Base, engine
-from models import User
+from models import User, UserSettings
 
 def init_db():
     """Create all database tables"""

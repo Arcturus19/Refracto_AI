@@ -3,26 +3,135 @@ Imaging Service - FastAPI Application
 Main entry point for the medical imaging microservice
 """
 
-from fastapi import FastAPI, Depends, HTTPException, status, UploadFile, File
+import io
+import logging
+import uuid
+from contextlib import asynccontextmanager
+from datetime import datetime
+from fastapi import FastAPI, Depends, File, HTTPException, UploadFile, status
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
-from contextlib import asynccontextmanager
 from typing import List
 from uuid import UUID
-import uuid
-from datetime import datetime
+import anyio
+import json
+import urllib.error
+import urllib.parse
+import urllib.request
 
 # Import local modules
+from auth import require_authenticated_user
 from database import engine, get_db, Base
 from models import ImageRecord, ImageType
 from schemas import ImageUploadResponse, ImageRecordResponse, ImageListResponse, UploadStatsResponse
 from minio_handler import get_minio_handler
 from config import settings
-import logging
 import pydicom
 import numpy as np
 from PIL import Image
-import io
+
+
+logger = logging.getLogger(__name__)
+
+
+def _is_internal_user(current_user: dict) -> bool:
+    return current_user.get("auth_type") == "internal"
+
+
+def _is_admin_user(current_user: dict) -> bool:
+    return current_user.get("role") == "admin"
+
+
+async def _verify_patient_access(patient_id: UUID, current_user: dict) -> None:
+    mode = (settings.ACCESS_ENFORCEMENT_MODE or "required").strip().lower()
+    if mode == "off":
+        return
+
+    # Internal ingestion worker is allowed.
+    if _is_internal_user(current_user) or _is_admin_user(current_user):
+        return
+
+    base_url = settings.PATIENT_SERVICE_URL.rstrip("/")
+    url = f"{base_url}/internal/patients/{patient_id}/verify"
+    query = urllib.parse.urlencode(
+        {
+            "user_id": current_user.get("user_id"),
+            "role": current_user.get("role"),
+        },
+        doseq=True,
+    )
+    full_url = f"{url}?{query}"
+
+    headers = {}
+    if settings.INTERNAL_API_TOKEN:
+        headers["X-Internal-Token"] = settings.INTERNAL_API_TOKEN
+
+    def _do_request() -> dict:
+        req = urllib.request.Request(full_url, headers=headers, method="GET")
+        with urllib.request.urlopen(req, timeout=5) as resp:
+            body = resp.read().decode("utf-8")
+            return json.loads(body) if body else {}
+
+    try:
+        data = await anyio.to_thread.run_sync(_do_request)
+    except urllib.error.HTTPError as http_err:
+        if http_err.code == 404:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Patient not found") from http_err
+        if http_err.code == 403:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Patient verification forbidden") from http_err
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Patient verification failed") from http_err
+    except Exception as exc:
+        logger.error("Patient verification call failed: %s", exc)
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Patient verification unavailable") from exc
+
+    if not data.get("allowed", False):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized for this patient")
+
+
+async def _get_accessible_patient_ids(current_user: dict) -> list[UUID]:
+    if _is_internal_user(current_user) or _is_admin_user(current_user):
+        return []
+
+    user_id = current_user.get("user_id")
+    if user_id is None:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Missing user identity")
+
+    base_url = settings.PATIENT_SERVICE_URL.rstrip("/")
+    url = f"{base_url}/internal/users/{user_id}/patients"
+
+    headers = {}
+    if settings.INTERNAL_API_TOKEN:
+        headers["X-Internal-Token"] = settings.INTERNAL_API_TOKEN
+
+    def _do_request() -> dict:
+        req = urllib.request.Request(url, headers=headers, method="GET")
+        with urllib.request.urlopen(req, timeout=5) as resp:
+            body = resp.read().decode("utf-8")
+            return json.loads(body) if body else {}
+
+    try:
+        data = await anyio.to_thread.run_sync(_do_request)
+    except urllib.error.HTTPError as http_err:
+        if http_err.code == 403:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Patient listing forbidden") from http_err
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Patient listing failed") from http_err
+    except Exception as exc:
+        logger.error("Patient listing call failed: %s", exc)
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Patient listing unavailable") from exc
+
+    patient_ids = data.get("patient_ids") or []
+    parsed: list[UUID] = []
+    for pid in patient_ids:
+        try:
+            parsed.append(UUID(str(pid)))
+        except Exception:
+            continue
+
+    return parsed
+
+
+def _cors_origins() -> list[str]:
+    return [origin.strip() for origin in settings.CORS_ORIGINS.split(",") if origin.strip()]
 
 
 # ============ Database Initialization ============
@@ -55,15 +164,15 @@ app = FastAPI(
     title="Refracto AI - Imaging Service",
     description="Medical Image Storage and Retrieval Service for Refracto AI Platform",
     version="1.0.0",
-    docs_url="/docs",
-    redoc_url="/redoc",
+    docs_url="/docs" if settings.DEBUG else None,
+    redoc_url="/redoc" if settings.DEBUG else None,
     lifespan=lifespan
 )
 
 # CORS middleware configuration
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Update with specific origins in production
+    allow_origins=_cors_origins(),
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -101,6 +210,26 @@ def validate_file_type(file: UploadFile) -> tuple[bool, str, ImageType]:
         return True, "", ImageType.OCT
     
     return False, f"Unsupported file type: {content_type}. Allowed: images (JPEG, PNG, TIFF, BMP) and DICOM files.", ImageType.FUNDUS
+
+
+def validate_file_content(file_content: bytes, image_type: ImageType) -> None:
+    if not file_content:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Uploaded file is empty"
+        )
+
+    try:
+        if image_type == ImageType.OCT:
+            pydicom.dcmread(io.BytesIO(file_content), stop_before_pixels=True)
+        else:
+            image = Image.open(io.BytesIO(file_content))
+            image.verify()
+    except Exception as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Uploaded file content is not a valid supported medical image"
+        ) from exc
 
 
 # ============ Root & Health Endpoints ============
@@ -142,8 +271,9 @@ async def health_check():
 async def upload_image(
     patient_id: UUID,
     file: UploadFile = File(...),
-    image_type: ImageType = ImageType.FUNDUS,
-    db: Session = Depends(get_db)
+    image_type: ImageType | None = None,
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(require_authenticated_user)
 ):
     """
     Upload a medical image for a patient
@@ -160,6 +290,8 @@ async def upload_image(
     Returns:
         ImageUploadResponse with upload details
     """
+    await _verify_patient_access(patient_id, current_user)
+
     # Step A: Validate file type
     is_valid, error_msg, detected_type = validate_file_type(file)
     if not is_valid:
@@ -169,7 +301,7 @@ async def upload_image(
         )
     
     # Use provided image_type or detected type
-    final_image_type = image_type
+    final_image_type = image_type or detected_type
     
     try:
         # Read file content
@@ -182,6 +314,8 @@ async def upload_image(
                 status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
                 detail=f"File too large. Maximum size: {settings.MAX_FILE_SIZE / (1024*1024)}MB"
             )
+
+        validate_file_content(file_content, final_image_type)
         
         # Generate unique file path in MinIO
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -291,7 +425,7 @@ async def upload_image(
         db.rollback()
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Upload failed: {str(e)}"
+            detail="Upload failed due to an internal server error"
         )
 
 
@@ -300,7 +434,8 @@ async def upload_image(
 @app.get("/images/recent", response_model=List[ImageRecordResponse])
 async def get_recent_images(
     limit: int = 10,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(require_authenticated_user)
 ):
     """
     Get recent images across all patients (for dashboard/notifications)
@@ -312,11 +447,16 @@ async def get_recent_images(
         List of recent image records with presigned URLs
     """
     try:
+        query = db.query(ImageRecord).order_by(ImageRecord.uploaded_at.desc())
+
+        if not (_is_internal_user(current_user) or _is_admin_user(current_user)):
+            allowed_patient_ids = await _get_accessible_patient_ids(current_user)
+            if not allowed_patient_ids:
+                return []
+            query = query.filter(ImageRecord.patient_id.in_(allowed_patient_ids))
+
         # Get recent images ordered by upload time
-        images = db.query(ImageRecord)\
-            .order_by(ImageRecord.uploaded_at.desc())\
-            .limit(limit)\
-            .all()
+        images = query.limit(limit).all()
         
         # Generate presigned URLs
         processed_images = []
@@ -347,7 +487,7 @@ async def get_recent_images(
         logger.error(f"Error fetching recent images: {str(e)}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to fetch recent images: {str(e)}"
+            detail="Failed to fetch recent images"
         )
 
 
@@ -355,7 +495,8 @@ async def get_recent_images(
 async def get_patient_images(
     patient_id: UUID,
     image_type: ImageType = None,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(require_authenticated_user)
 ):
     """
     Get all images for a patient with presigned URLs
@@ -367,6 +508,8 @@ async def get_patient_images(
     Returns:
         List of image records with accessible URLs
     """
+    await _verify_patient_access(patient_id, current_user)
+
     # Query database for patient's images
     query = db.query(ImageRecord).filter(ImageRecord.patient_id == patient_id)
     
@@ -401,7 +544,8 @@ async def get_patient_images(
 @app.get("/image/{image_id}", response_model=ImageRecordResponse)
 async def get_image_by_id(
     image_id: int,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(require_authenticated_user)
 ):
     """
     Get a specific image by ID with presigned URL
@@ -419,6 +563,8 @@ async def get_image_by_id(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Image with ID {image_id} not found"
         )
+
+    await _verify_patient_access(image.patient_id, current_user)
     
     # Generate presigned URL
     minio = get_minio_handler()
@@ -437,19 +583,34 @@ async def get_image_by_id(
 # ============ Statistics Endpoint ============
 
 @app.get("/stats", response_model=UploadStatsResponse)
-async def get_upload_statistics(db: Session = Depends(get_db)):
+async def get_upload_statistics(
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(require_authenticated_user)
+):
     """
     Get upload statistics across all patients
     
     Returns:
         Statistics about uploaded images
     """
-    total_images = db.query(ImageRecord).count()
-    total_size = db.query(func.sum(ImageRecord.file_size)).scalar() or 0
-    
+    base_query = db.query(ImageRecord)
+    if not (_is_internal_user(current_user) or _is_admin_user(current_user)):
+        allowed_patient_ids = await _get_accessible_patient_ids(current_user)
+        if not allowed_patient_ids:
+            return UploadStatsResponse(
+                total_images=0,
+                total_size_bytes=0,
+                total_size_mb=0,
+                by_type={"FUNDUS": 0, "OCT": 0},
+            )
+        base_query = base_query.filter(ImageRecord.patient_id.in_(allowed_patient_ids))
+
+    total_images = base_query.count()
+    total_size = base_query.with_entities(func.sum(ImageRecord.file_size)).scalar() or 0
+
     # Count by type
-    fundus_count = db.query(ImageRecord).filter(ImageRecord.image_type == ImageType.FUNDUS).count()
-    oct_count = db.query(ImageRecord).filter(ImageRecord.image_type == ImageType.OCT).count()
+    fundus_count = base_query.filter(ImageRecord.image_type == ImageType.FUNDUS).count()
+    oct_count = base_query.filter(ImageRecord.image_type == ImageType.OCT).count()
     
     return UploadStatsResponse(
         total_images=total_images,
@@ -467,7 +628,8 @@ async def get_upload_statistics(db: Session = Depends(get_db)):
 @app.delete("/image/{image_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_image(
     image_id: int,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(require_authenticated_user)
 ):
     """
     Delete an image record and its file from storage
@@ -482,6 +644,8 @@ async def delete_image(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Image with ID {image_id} not found"
         )
+
+    await _verify_patient_access(image.patient_id, current_user)
     
     # Delete from MinIO
     minio = get_minio_handler()
@@ -511,6 +675,6 @@ if __name__ == "__main__":
         "main:app",
         host="0.0.0.0",
         port=8000,
-        reload=True,
+        reload=settings.DEBUG,
         log_level="info"
     )

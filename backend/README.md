@@ -32,14 +32,15 @@ cd "c:\Users\VICTUS\Desktop\Refracto AI\backend"
 
 ### Step 2: Environment Setup
 
-The `.env` file is already configured with default credentials:
-- **PostgreSQL User**: `refracto_admin`
-- **PostgreSQL Password**: `refracto_secure_password_2026`
-- **Database Name**: `refracto_ai_db`
-- **pgAdmin Email**: `admin@refracto.ai`
-- **pgAdmin Password**: `admin_secure_pass_2026`
+Create a local `.env` file from the template and set strong values.
 
-> ⚠️ **Security Note**: Change these credentials in production!
+```powershell
+Copy-Item .env.example .env
+```
+
+> ⚠️ **Security note**:
+> - Never commit `.env` (it contains secrets). This repo includes `.env.example` only.
+> - Rotate all secrets before any real deployment (JWT secret, internal service token, MinIO creds, DB password).
 
 ### Step 3: Start Docker Containers
 

@@ -1,8 +1,15 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { ClinicalConcordancePanel } from '../ClinicalConcordancePanel';
-import { mockApiResponses, mockFetchSuccess, resetAllMocks } from '../../tests/setup';
+import { mockFetchSuccess, resetAllMocks } from '../../tests/setup';
+
+const selectLikertScore = async (user: ReturnType<typeof userEvent.setup>, scaleLabel: RegExp, score: number) => {
+  const labelNode = screen.getByText(scaleLabel);
+  const scaleContainer = labelNode.closest('div');
+  if (!scaleContainer) throw new Error(`Could not find container for scale: ${String(scaleLabel)}`);
+  await user.click(within(scaleContainer).getByRole('button', { name: String(score) }));
+};
 
 describe('ClinicalConcordancePanel Component', () => {
   const mockPredictions = {
@@ -50,8 +57,8 @@ describe('ClinicalConcordancePanel Component', () => {
       />
     );
     
-    expect(screen.getByText(/1.*strongly disagree|disagree/i)).toBeInTheDocument();
-    expect(screen.getByText(/5.*strongly agree/i)).toBeInTheDocument();
+    expect(screen.getByText(/1\s+strongly disagree/i)).toBeInTheDocument();
+    expect(screen.getByText(/5\s+strongly agree/i)).toBeInTheDocument();
   });
 
   it('allows selecting Likert scores and highlights selection', async () => {
@@ -62,16 +69,15 @@ describe('ClinicalConcordancePanel Component', () => {
         predictions={mockPredictions}
       />
     );
-    
-    const agreeButtons = screen.getAllByRole('button').filter(btn => btn.textContent === '4');
-    await user.click(agreeButtons[0]);
-    
-    expect(agreeButtons[0]).toHaveClass('bg-blue-500', 'bg-green-500', 'selected');
+
+    await selectLikertScore(user, /diabetic retinopathy assessment/i, 4);
+    const labelNode = screen.getByText(/diabetic retinopathy assessment/i);
+    const scaleContainer = labelNode.closest('div');
+    expect(within(scaleContainer as HTMLElement).getByRole('button', { name: '4' })).toHaveClass('bg-blue-500', 'bg-green-500', 'selected');
   });
 
   it('requires all three assessments before submission', async () => {
     const user = userEvent.setup();
-    mockFetchSuccess({ success: true });
     
     render(
       <ClinicalConcordancePanel
@@ -86,11 +92,7 @@ describe('ClinicalConcordancePanel Component', () => {
     await user.click(ratingButtons[3]); // Select grade 4
     
     const submitBtn = screen.getByRole('button', { name: /submit/i });
-    fireEvent.click(submitBtn);
-    
-    await waitFor(() => {
-      expect(screen.getByText(/please rate all|all three/i)).toBeInTheDocument();
-    });
+    expect(submitBtn).toBeDisabled();
   });
 
   it('displays clinician ID input field', () => {
@@ -106,8 +108,6 @@ describe('ClinicalConcordancePanel Component', () => {
 
   it('submits review with complete data', async () => {
     const user = userEvent.setup();
-    mockFetchSuccess({ success: true, review_id: 'REV_001' });
-    
     const mockOnSubmit = vi.fn();
     render(
       <ClinicalConcordancePanel
@@ -116,14 +116,10 @@ describe('ClinicalConcordancePanel Component', () => {
         onReviewSubmitted={mockOnSubmit}
       />
     );
-    
-    // Select all three Likert scores (4 = agree)
-    const allButtons = screen.getAllByRole('button');
-    const ratingButtons = allButtons.filter(btn => btn.textContent === '4');
-    
-    for (let i = 0; i < 3 && i < ratingButtons.length; i++) {
-      await user.click(ratingButtons[i]);
-    }
+
+    await selectLikertScore(user, /diabetic retinopathy assessment/i, 4);
+    await selectLikertScore(user, /glaucoma screening assessment/i, 4);
+    await selectLikertScore(user, /refraction accuracy assessment/i, 4);
     
     // Enter clinician ID
     const clinicianInput = screen.getByPlaceholderText(/clinician|expert/i);
@@ -134,9 +130,13 @@ describe('ClinicalConcordancePanel Component', () => {
     await user.click(submitBtn);
     
     await waitFor(() => {
-      expect(global.fetch).toHaveBeenCalledWith(
-        expect.stringContaining('/api/ml/expert-review/submit'),
-        expect.any(Object)
+      expect(mockOnSubmit).toHaveBeenCalledWith(
+        expect.objectContaining({
+          dr_assessment: 4,
+          glaucoma_assessment: 4,
+          refraction_assessment: 4,
+          clinician_id: 'DR_001',
+        })
       );
     });
   });
@@ -153,11 +153,9 @@ describe('ClinicalConcordancePanel Component', () => {
     );
     
     // Complete form
-    const allButtons = screen.getAllByRole('button');
-    const ratingButtons = allButtons.filter(btn => btn.textContent === '4');
-    for (let i = 0; i < 3; i++) {
-      await user.click(ratingButtons[i]);
-    }
+    await selectLikertScore(user, /diabetic retinopathy assessment/i, 4);
+    await selectLikertScore(user, /glaucoma screening assessment/i, 4);
+    await selectLikertScore(user, /refraction accuracy assessment/i, 4);
     
     const clinicianInput = screen.getByPlaceholderText(/clinician/i);
     await user.type(clinicianInput, 'DR_001');
@@ -179,7 +177,9 @@ describe('ClinicalConcordancePanel Component', () => {
     );
     
     // Should display the predictions being reviewed
-    expect(screen.getByText(/Mild|Normal|-0\.50/)).toBeInTheDocument();
+    expect(screen.getByText(/mild/i)).toBeInTheDocument();
+    expect(screen.getByText(/normal/i)).toBeInTheDocument();
+    expect(screen.getByText(/-0\.50/)).toBeInTheDocument();
   });
 
   it('handles API errors gracefully', async () => {
@@ -193,11 +193,9 @@ describe('ClinicalConcordancePanel Component', () => {
       />
     );
     
-    const allButtons = screen.getAllByRole('button');
-    const ratingButtons = allButtons.filter(btn => btn.textContent === '4');
-    for (let i = 0; i < 3; i++) {
-      await user.click(ratingButtons[i]);
-    }
+    await selectLikertScore(user, /diabetic retinopathy assessment/i, 4);
+    await selectLikertScore(user, /glaucoma screening assessment/i, 4);
+    await selectLikertScore(user, /refraction accuracy assessment/i, 4);
     
     const clinicianInput = screen.getByPlaceholderText(/clinician/i);
     await user.type(clinicianInput, 'DR_001');
@@ -206,7 +204,7 @@ describe('ClinicalConcordancePanel Component', () => {
     await user.click(submitBtn);
     
     await waitFor(() => {
-      expect(screen.getByText(/error|failed/i)).toBeInTheDocument();
+      expect(screen.getByText(/database error/i)).toBeInTheDocument();
     });
   });
 });

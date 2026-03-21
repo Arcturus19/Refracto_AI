@@ -18,10 +18,11 @@ TEMP_STORAGE_DIR = os.getenv("TEMP_STORAGE_DIR", "/tmp/dicom_received")
 # Service URLs (internal Docker network)
 PATIENT_SERVICE_URL = os.getenv("PATIENT_SERVICE_URL", "http://patient_service:8000")
 IMAGING_SERVICE_URL = os.getenv("IMAGING_SERVICE_URL", "http://imaging_service:8000")
+INTERNAL_API_TOKEN = os.getenv("INTERNAL_API_TOKEN")
 
 # Feature Flags
 AUTO_INGEST = os.getenv("AUTO_INGEST", "true").lower() == "true"
-AUTO_CREATE_PATIENTS = os.getenv("AUTO_CREATE_PATIENTS", "true").lower() == "true"
+AUTO_CREATE_PATIENTS = os.getenv("AUTO_CREATE_PATIENTS", "false").lower() == "true"
 DELETE_AFTER_UPLOAD = os.getenv("DELETE_AFTER_UPLOAD", "true").lower() == "true"
 
 # Default patient data for auto-creation

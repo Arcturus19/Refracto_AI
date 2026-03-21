@@ -5,7 +5,7 @@ import ImageUploader from '../components/ImageUploader'
 import { patientService, imagingService, type Patient, type ImageRecord } from '../services/api'
 
 export default function PatientDetails() {
-    const { patientId } = useParams<{ patientId: string }>()
+    const { id: patientId } = useParams<{ id: string }>()
     const navigate = useNavigate()
 
     const [patient, setPatient] = useState<Patient | null>(null)

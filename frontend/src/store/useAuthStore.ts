@@ -1,25 +1,30 @@
 import { create } from 'zustand'
 import { authService, type User, type LoginRequest } from '../services/api'
+import { clearAccessToken, setAccessToken } from '../utils/authSession'
 
 interface AuthState {
     user: User | null
     token: string | null
     isAuthenticated: boolean
     isLoading: boolean
+    hasCheckedAuth: boolean
     error: string | null
 
     // Actions
     login: (credentials: LoginRequest) => Promise<void>
-    logout: () => void
+    logout: () => Promise<void>
     checkAuth: () => Promise<void>
+    clearSession: () => void
     clearError: () => void
+    updateUser: (updates: Partial<User>) => void
 }
 
 export const useAuthStore = create<AuthState>((set) => ({
     user: null,
-    token: localStorage.getItem('auth_token'),
+    token: null,
     isAuthenticated: false,
     isLoading: false,
+    hasCheckedAuth: false,
     error: null,
 
     /**
@@ -31,9 +36,7 @@ export const useAuthStore = create<AuthState>((set) => ({
         try {
             const response = await authService.login(credentials)
 
-            // Save token and user data to localStorage
-            localStorage.setItem('auth_token', response.access_token)
-            localStorage.setItem('user_data', JSON.stringify(response.user))
+            setAccessToken(response.access_token)
 
             // Update state
             set({
@@ -41,6 +44,7 @@ export const useAuthStore = create<AuthState>((set) => ({
                 token: response.access_token,
                 isAuthenticated: true,
                 isLoading: false,
+                hasCheckedAuth: true,
                 error: null,
             })
 
@@ -53,6 +57,7 @@ export const useAuthStore = create<AuthState>((set) => ({
                 token: null,
                 isAuthenticated: false,
                 isLoading: false,
+                hasCheckedAuth: true,
                 error: errorMessage,
             })
 
@@ -64,52 +69,63 @@ export const useAuthStore = create<AuthState>((set) => ({
     /**
      * Logout user and clear auth data
      */
-    logout: () => {
-        localStorage.removeItem('auth_token')
-        localStorage.removeItem('user_data')
+    logout: async () => {
+        try {
+            await authService.logout()
+        } finally {
+            clearAccessToken()
+            set({
+                user: null,
+                token: null,
+                isAuthenticated: false,
+                isLoading: false,
+                hasCheckedAuth: true,
+                error: null,
+            })
 
-        set({
-            user: null,
-            token: null,
-            isAuthenticated: false,
-            error: null,
-        })
-
-        console.log('✓ Logged out successfully')
+            console.log('✓ Logged out successfully')
+        }
     },
 
     /**
      * Check if user is authenticated by validating token
      */
     checkAuth: async () => {
-        const token = localStorage.getItem('auth_token')
-
-        if (!token) {
-            set({ isAuthenticated: false, user: null })
-            return
-        }
+        set({ isLoading: true })
 
         try {
-            // Validate token by fetching current user
             const user = await authService.getCurrentUser()
 
             set({
                 user,
-                token,
                 isAuthenticated: true,
+                isLoading: false,
+                hasCheckedAuth: true,
                 error: null,
             })
         } catch (error) {
-            // Token is invalid or expired
-            localStorage.removeItem('auth_token')
-            localStorage.removeItem('user_data')
+            clearAccessToken()
 
             set({
                 user: null,
                 token: null,
                 isAuthenticated: false,
+                isLoading: false,
+                hasCheckedAuth: true,
             })
         }
+    },
+
+    clearSession: () => {
+        clearAccessToken()
+        set({
+            user: null,
+            token: null,
+            isAuthenticated: false,
+            isLoading: false,
+            hasCheckedAuth: true,
+            error: null,
+        })
     },
 
     /**
@@ -117,5 +133,25 @@ export const useAuthStore = create<AuthState>((set) => ({
      */
     clearError: () => {
         set({ error: null })
+    },
+
+    /**
+     * Update cached user profile data in store.
+     * This keeps header/profile UI in sync even without a backend update endpoint.
+     */
+    updateUser: (updates: Partial<User>) => {
+        set((state) => {
+            if (!state.user) return state
+
+            const updatedUser: User = {
+                ...state.user,
+                ...updates,
+            }
+
+            return {
+                ...state,
+                user: updatedUser,
+            }
+        })
     },
 }))

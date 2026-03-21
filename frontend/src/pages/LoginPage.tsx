@@ -22,7 +22,6 @@ export default function LoginPage() {
     const [regName, setRegName] = useState('')
     const [regEmail, setRegEmail] = useState('')
     const [regPassword, setRegPassword] = useState('')
-    const [regRole, setRegRole] = useState<'doctor' | 'admin'>('doctor')
     const [regLoading, setRegLoading] = useState(false)
 
     // Redirect if already authenticated
@@ -49,7 +48,7 @@ export default function LoginPage() {
         }
         setRegLoading(true)
         try {
-            await authService.register({ email: regEmail, password: regPassword, full_name: regName, role: regRole })
+            await authService.register({ email: regEmail, password: regPassword, full_name: regName })
             toast.success('Account created! Please log in.')
             setTab('login')
             setLoginEmail(regEmail)
@@ -194,18 +193,6 @@ export default function LoginPage() {
                                             {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
                                         </button>
                                     </div>
-                                </div>
-
-                                <div>
-                                    <label className="block text-xs font-medium text-slate-300 mb-1.5">Role</label>
-                                    <select
-                                        value={regRole}
-                                        onChange={e => setRegRole(e.target.value as 'doctor' | 'admin')}
-                                        className="w-full px-4 py-3 rounded-xl bg-slate-800 border border-white/10 text-white focus:outline-none focus:ring-2 focus:ring-blue-400 transition text-sm"
-                                    >
-                                        <option value="doctor">Doctor</option>
-                                        <option value="admin">Admin</option>
-                                    </select>
                                 </div>
 
                                 <button

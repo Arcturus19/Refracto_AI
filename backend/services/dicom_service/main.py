@@ -6,10 +6,12 @@ import logging
 from datetime import datetime
 from pathlib import Path
 import requests
+from uuid import UUID
 from config import (
     DICOM_AE_TITLE, DICOM_PORT, DICOM_HOST, TEMP_STORAGE_DIR,
     PATIENT_SERVICE_URL, IMAGING_SERVICE_URL,
     AUTO_INGEST, AUTO_CREATE_PATIENTS, DELETE_AFTER_UPLOAD,
+    INTERNAL_API_TOKEN,
     DEFAULT_DOB, DEFAULT_GENDER
 )
 
@@ -24,7 +26,27 @@ logger = logging.getLogger(__name__)
 os.makedirs(TEMP_STORAGE_DIR, exist_ok=True)
 
 
-def find_or_create_patient(patient_id: str, patient_name: str) -> str:
+def get_service_headers() -> dict[str, str]:
+    if not INTERNAL_API_TOKEN:
+        return {}
+    return {"X-Internal-Token": INTERNAL_API_TOKEN}
+
+
+def _clean_dicom_name(patient_name: str) -> str:
+    cleaned = (patient_name or "").replace("^", " ").strip()
+    return cleaned or "Unknown"
+
+
+def _patient_exists(patient_uuid: str) -> bool:
+    try:
+        url = f"{PATIENT_SERVICE_URL}/patients/{patient_uuid}"
+        resp = requests.get(url, headers=get_service_headers(), timeout=10)
+        return resp.status_code == 200
+    except Exception:
+        return False
+
+
+def find_or_create_patient(patient_id: str, patient_name: str) -> str | None:
     """
     Find existing patient or create new one
     
@@ -36,36 +58,48 @@ def find_or_create_patient(patient_id: str, patient_name: str) -> str:
         Patient UUID from patient service
     """
     try:
-        # Step A1: Search for existing patient
-        logger.info(f"🔍 Searching for patient: {patient_id}")
+        cleaned_name = _clean_dicom_name(patient_name)
+
+        # Step A0: If PatientID is already a UUID, use it only if it exists.
+        try:
+            as_uuid = str(UUID(str(patient_id)))
+            logger.info(f"🔍 DICOM PatientID looks like UUID: {as_uuid}")
+            if _patient_exists(as_uuid):
+                logger.info(f"✓ Using existing patient UUID from DICOM: {as_uuid}")
+                return as_uuid
+            logger.warning("⚠️  DICOM PatientID is UUID-form but patient does not exist")
+            return None
+        except Exception:
+            pass
+
+        # Step A1: Search for existing patient by name (best-effort)
+        logger.info(f"🔍 Searching for patient by name: {cleaned_name}")
         search_url = f"{PATIENT_SERVICE_URL}/patients"
-        params = {"search": patient_id}
-        
-        response = requests.get(search_url, params=params, timeout=10)
+        params = {"search": cleaned_name}
+
+        response = requests.get(search_url, params=params, headers=get_service_headers(), timeout=10)
         response.raise_for_status()
-        
-        patients = response.json()
-        
-        if patients and len(patients) > 0:
-            # Patient found
-            patient_uuid = patients[0]['id']
+
+        patients = response.json() or []
+
+        if patients:
+            patient_uuid = patients[0]["id"]
             logger.info(f"✓ Found existing patient: {patient_uuid}")
             return patient_uuid
         
         # Step A2: Create new patient
         if AUTO_CREATE_PATIENTS:
-            logger.info(f"📝 Creating new patient: {patient_name} ({patient_id})")
+            logger.info(f"📝 Creating new patient: {cleaned_name} (DICOM PatientID={patient_id})")
             
             create_url = f"{PATIENT_SERVICE_URL}/patients"
             patient_data = {
-                "full_name": patient_name.replace("^", " ").strip(),
+                "full_name": cleaned_name,
                 "dob": DEFAULT_DOB,
                 "gender": DEFAULT_GENDER,
                 "diabetes_status": False,
-                "external_id": patient_id  # Store DICOM ID
             }
             
-            response = requests.post(create_url, json=patient_data, timeout=10)
+            response = requests.post(create_url, json=patient_data, headers=get_service_headers(), timeout=10)
             response.raise_for_status()
             
             patient_uuid = response.json()['id']
@@ -105,7 +139,13 @@ def upload_to_imaging_service(patient_uuid: str, filepath: str, modality: str) -
             files = {'file': (os.path.basename(filepath), f, 'application/dicom')}
             data = {'image_type': image_type}
             
-            response = requests.post(upload_url, files=files, data=data, timeout=30)
+            response = requests.post(
+                upload_url,
+                files=files,
+                data=data,
+                headers=get_service_headers(),
+                timeout=30
+            )
             response.raise_for_status()
         
         logger.info(f"✓ Image uploaded successfully")

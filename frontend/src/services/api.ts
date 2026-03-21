@@ -1,14 +1,17 @@
 import axios from 'axios'
+import { clearAccessToken, getAccessToken } from '../utils/authSession'
 
-// Base URL configuration - Auth Service for now (will be API Gateway later)
-const API_BASE_URL = 'http://localhost:8001'
-const PATIENT_API_BASE_URL = 'http://localhost:8002'
-const IMAGING_API_BASE_URL = 'http://localhost:8003'
-const ML_API_BASE_URL = 'http://localhost:8004'
+export const AUTH_EXPIRED_EVENT = 'auth:expired'
+
+const AUTH_API_BASE_URL = import.meta.env.VITE_AUTH_API_URL || '/api/auth'
+const PATIENT_API_BASE_URL = import.meta.env.VITE_PATIENT_API_URL || '/api/patients'
+const IMAGING_API_BASE_URL = import.meta.env.VITE_IMAGING_API_URL || '/api/imaging'
+const ML_API_BASE_URL = import.meta.env.VITE_ML_API_URL || '/api/ml'
 
 // Create Axios instance for Auth Service
 const authApi = axios.create({
-  baseURL: API_BASE_URL,
+  baseURL: AUTH_API_BASE_URL,
+  withCredentials: true,
   headers: {
     'Content-Type': 'application/json',
   },
@@ -17,6 +20,7 @@ const authApi = axios.create({
 // Create Axios instance for Patient Service
 const patientApi = axios.create({
   baseURL: PATIENT_API_BASE_URL,
+  withCredentials: true,
   headers: {
     'Content-Type': 'application/json',
   },
@@ -25,6 +29,7 @@ const patientApi = axios.create({
 // Create Axios instance for Imaging Service
 const imagingApi = axios.create({
   baseURL: IMAGING_API_BASE_URL,
+  withCredentials: true,
   headers: {
     'Content-Type': 'application/json',
   },
@@ -33,6 +38,7 @@ const imagingApi = axios.create({
 // Create Axios instance for ML Service
 const mlApi = axios.create({
   baseURL: ML_API_BASE_URL,
+  withCredentials: true,
   headers: {
     'Content-Type': 'application/json',
   },
@@ -40,7 +46,7 @@ const mlApi = axios.create({
 
 // Request Interceptor: Attach JWT token to all requests
 const attachTokenInterceptor = (config: any) => {
-  const token = localStorage.getItem('auth_token')
+  const token = getAccessToken()
   if (token) {
     config.headers.Authorization = `Bearer ${token}`
   }
@@ -50,10 +56,8 @@ const attachTokenInterceptor = (config: any) => {
 // Response Interceptor: Handle 401 Unauthorized
 const handleUnauthorizedInterceptor = (error: any) => {
   if (error.response?.status === 401) {
-    // Token expired or invalid - clear auth and redirect to login
-    localStorage.removeItem('auth_token')
-    localStorage.removeItem('user_data')
-    window.location.href = '/login'
+    clearAccessToken()
+    window.dispatchEvent(new Event(AUTH_EXPIRED_EVENT))
   }
   return Promise.reject(error)
 }
@@ -99,7 +103,20 @@ export interface RegisterRequest {
   email: string
   password: string
   full_name: string
-  role?: 'admin' | 'doctor'
+}
+
+export interface ProfileUpdateRequest {
+  full_name: string
+  email: string
+}
+
+export interface PasswordChangeRequest {
+  current_password: string
+  new_password: string
+}
+
+export interface UserSettingsResponse {
+  settings: Record<string, any>
 }
 
 export interface Patient {
@@ -175,6 +192,11 @@ export const authService = {
     return response.data
   },
 
+  logout: async (): Promise<{ message: string }> => {
+    const response = await authApi.post<{ message: string }>('/logout')
+    return response.data
+  },
+
   /**
    * Get current authenticated user
    */
@@ -188,6 +210,38 @@ export const authService = {
    */
   getAllUsers: async (): Promise<User[]> => {
     const response = await authApi.get<User[]>('/admin/users')
+    return response.data
+  },
+
+  /**
+   * Update current authenticated user profile
+   */
+  updateProfile: async (payload: ProfileUpdateRequest): Promise<User> => {
+    const response = await authApi.put<User>('/me/profile', payload)
+    return response.data
+  },
+
+  /**
+   * Change current authenticated user password
+   */
+  changePassword: async (payload: PasswordChangeRequest): Promise<{ message: string }> => {
+    const response = await authApi.put<{ message: string }>('/me/password', payload)
+    return response.data
+  },
+
+  /**
+   * Get current authenticated user settings
+   */
+  getMySettings: async (): Promise<UserSettingsResponse> => {
+    const response = await authApi.get<UserSettingsResponse>('/me/settings')
+    return response.data
+  },
+
+  /**
+   * Update current authenticated user settings
+   */
+  updateMySettings: async (settings: Record<string, any>): Promise<UserSettingsResponse> => {
+    const response = await authApi.put<UserSettingsResponse>('/me/settings', { settings })
     return response.data
   },
 }
@@ -325,13 +379,14 @@ export const mlService = {
   /**
    * Predict refraction measurements
    */
-  predictRefraction: async (file: File): Promise<{
+  predictRefraction: async (file: File, patientId?: string): Promise<{
     sphere: number
     cylinder: number
     axis: number
   }> => {
     const formData = new FormData()
     formData.append('file', file)
+    if (patientId) formData.append('patient_id', patientId)
 
     const response = await mlApi.post('/predict/refraction', formData, {
       headers: {
@@ -344,12 +399,13 @@ export const mlService = {
   /**
    * Predict pathology (DR grade and glaucoma risk)
    */
-  predictPathology: async (file: File): Promise<{
+  predictPathology: async (file: File, patientId?: string): Promise<{
     dr_grade: number
     glaucoma_risk: number
   }> => {
     const formData = new FormData()
     formData.append('file', file)
+    if (patientId) formData.append('patient_id', patientId)
 
     const response = await mlApi.post('/predict/pathology', formData, {
       headers: {
@@ -417,8 +473,8 @@ export const analyzeScan = async (
 
     // Step 2: Get ML predictions
     const [refractionResult, pathologyResult] = await Promise.all([
-      mlService.predictRefraction(file),
-      mlService.predictPathology(file)
+      mlService.predictRefraction(file, patientId),
+      mlService.predictPathology(file, patientId)
     ])
 
     console.log('✓ ML predictions received')

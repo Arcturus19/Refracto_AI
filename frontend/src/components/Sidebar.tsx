@@ -1,22 +1,37 @@
-import React from 'react'
-import { LayoutDashboard, Users, Brain, FileText, Settings, X, Zap } from 'lucide-react'
+import React, { useMemo } from 'react'
+import { LayoutDashboard, Users, Brain, FileText, Settings, X, User, Inbox, ClipboardList, ServerCog } from 'lucide-react'
 import { Link, useLocation } from 'react-router-dom'
+import { useAuthStore } from '../store/useAuthStore'
 
 interface SidebarProps {
     isOpen: boolean
     onClose: () => void
 }
 
-const navItems = [
+const baseNavItems = [
     { icon: LayoutDashboard, label: 'Dashboard', path: '/' },
+    { icon: Inbox, label: 'Scans', path: '/scans' },
     { icon: Users, label: 'Patients', path: '/patients' },
     { icon: Brain, label: 'AI Analysis', path: '/analysis' },
     { icon: FileText, label: 'Reports', path: '/reports' },
+    { icon: User, label: 'Profile', path: '/profile' },
     { icon: Settings, label: 'Settings', path: '/settings' },
-]
+] as const
+
+const adminNavItems = [
+    { icon: ClipboardList, label: 'Audit', path: '/audit' },
+    { icon: ServerCog, label: 'System', path: '/system' },
+    { icon: Users, label: 'Users', path: '/admin/users' },
+] as const
 
 export default function Sidebar({ isOpen, onClose }: SidebarProps) {
     const location = useLocation()
+    const { user } = useAuthStore()
+
+    const navItems = useMemo(() => {
+        if (user?.role === 'admin') return [...baseNavItems, ...adminNavItems]
+        return [...baseNavItems]
+    }, [user?.role])
 
     return (
         <>

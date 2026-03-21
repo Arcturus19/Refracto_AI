@@ -1,0 +1,223 @@
+{
+  "model": "efficientnet_b0",
+  "img_size": 224,
+  "device": "cpu",
+  "classes": [
+    "CNV",
+    "DME",
+    "DRUSEN",
+    "NORMAL"
+  ],
+  "class_weights": {
+    "CNV": 0.5609723320158103,
+    "DME": 1.8391820443707236,
+    "DRUSEN": 2.422276078645549,
+    "NORMAL": 0.7931308118741058
+  },
+  "dataset": {
+    "train": {
+      "CNV": 31625,
+      "DME": 9646,
+      "DRUSEN": 7324,
+      "NORMAL": 22368,
+      "total": 70963
+    },
+    "val": {
+      "CNV": 5580,
+      "DME": 1702,
+      "DRUSEN": 1292,
+      "NORMAL": 3947,
+      "total": 12521
+    },
+    "test": {
+      "CNV": 250,
+      "DME": 250,
+      "DRUSEN": 250,
+      "NORMAL": 250,
+      "total": 1000
+    }
+  },
+  "best_val_macro_f1": 0.13636363636363635,
+  "test": {
+    "accuracy": 0.25,
+    "macro_f1": 0.1,
+    "balanced_accuracy": 0.0625,
+    "per_class": {
+      "CNV": {
+        "precision": 1.0,
+        "recall": 0.25,
+        "f1": 0.4,
+        "support": 8
+      },
+      "DME": {
+        "precision": 0.0,
+        "recall": 0.0,
+        "f1": 0.0,
+        "support": 0
+      },
+      "DRUSEN": {
+        "precision": 0.0,
+        "recall": 0.0,
+        "f1": 0.0,
+        "support": 0
+      },
+      "NORMAL": {
+        "precision": 0.0,
+        "recall": 0.0,
+        "f1": 0.0,
+        "support": 0
+      }
+    },
+    "confusion_matrix": [
+      [
+        2,
+        0,
+        6,
+        0
+      ],
+      [
+        0,
+        0,
+        0,
+        0
+      ],
+      [
+        0,
+        0,
+        0,
+        0
+      ],
+      [
+        0,
+        0,
+        0,
+        0
+      ]
+    ],
+    "loss": 2.0724384784698486
+  },
+  "epochs_ran": 1,
+  "elapsed_seconds": 1.2383615970611572,
+  "history": [
+    {
+      "epoch": 1,
+      "train": {
+        "accuracy": 0.125,
+        "macro_f1": 0.1,
+        "balanced_accuracy": 0.125,
+        "per_class": {
+          "CNV": {
+            "precision": 0.0,
+            "recall": 0.0,
+            "f1": 0.0,
+            "support": 2
+          },
+          "DME": {
+            "precision": 0.3333333333333333,
+            "recall": 0.5,
+            "f1": 0.4,
+            "support": 2
+          },
+          "DRUSEN": {
+            "precision": 0.0,
+            "recall": 0.0,
+            "f1": 0.0,
+            "support": 2
+          },
+          "NORMAL": {
+            "precision": 0.0,
+            "recall": 0.0,
+            "f1": 0.0,
+            "support": 2
+          }
+        },
+        "confusion_matrix": [
+          [
+            0,
+            1,
+            0,
+            1
+          ],
+          [
+            0,
+            1,
+            1,
+            0
+          ],
+          [
+            0,
+            1,
+            0,
+            1
+          ],
+          [
+            2,
+            0,
+            0,
+            0
+          ]
+        ],
+        "loss": 3.6912028789520264
+      },
+      "val": {
+        "accuracy": 0.375,
+        "macro_f1": 0.13636363636363635,
+        "balanced_accuracy": 0.09375,
+        "per_class": {
+          "CNV": {
+            "precision": 1.0,
+            "recall": 0.375,
+            "f1": 0.5454545454545454,
+            "support": 8
+          },
+          "DME": {
+            "precision": 0.0,
+            "recall": 0.0,
+            "f1": 0.0,
+            "support": 0
+          },
+          "DRUSEN": {
+            "precision": 0.0,
+            "recall": 0.0,
+            "f1": 0.0,
+            "support": 0
+          },
+          "NORMAL": {
+            "precision": 0.0,
+            "recall": 0.0,
+            "f1": 0.0,
+            "support": 0
+          }
+        },
+        "confusion_matrix": [
+          [
+            3,
+            0,
+            5,
+            0
+          ],
+          [
+            0,
+            0,
+            0,
+            0
+          ],
+          [
+            0,
+            0,
+            0,
+            0
+          ],
+          [
+            0,
+            0,
+            0,
+            0
+          ]
+        ],
+        "loss": 3.015023708343506
+      },
+      "lr": 0.0003
+    }
+  ]
+}

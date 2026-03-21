@@ -17,8 +17,8 @@ class MinIOClient:
     def __init__(
         self,
         endpoint: str = "localhost:9000",
-        access_key: str = "admin",
-        secret_key: str = "password123",
+        access_key: str | None = None,
+        secret_key: str | None = None,
         secure: bool = False
     ):
         """
@@ -26,10 +26,13 @@ class MinIOClient:
         
         Args:
             endpoint: MinIO server endpoint (default: localhost:9000)
-            access_key: MinIO root user (default: admin)
-            secret_key: MinIO root password (default: password123)
+            access_key: MinIO root user
+            secret_key: MinIO root password
             secure: Use HTTPS (default: False for local development)
         """
+        if not access_key or not secret_key:
+            raise ValueError("MINIO_ROOT_USER and MINIO_ROOT_PASSWORD must be configured")
+
         self.client = Minio(
             endpoint=endpoint,
             access_key=access_key,
@@ -242,8 +245,8 @@ def get_minio_client() -> MinIOClient:
     """
     # In production, load these from environment variables
     endpoint = os.getenv("MINIO_ENDPOINT", "localhost:9000")
-    access_key = os.getenv("MINIO_ROOT_USER", "admin")
-    secret_key = os.getenv("MINIO_ROOT_PASSWORD", "password123")
+    access_key = os.getenv("MINIO_ROOT_USER")
+    secret_key = os.getenv("MINIO_ROOT_PASSWORD")
     secure = os.getenv("MINIO_SECURE", "false").lower() == "true"
     
     return MinIOClient(

@@ -16,6 +16,7 @@ metadata:
   namespace: refracto-ai
 data:
   MODEL_PATH: /models/refracto_fusion.onnx
+  OCT_CHECKPOINT_PATH: /models/oct_best.pt
   BATCH_SIZE: "32"
   MAX_WORKERS: "4"
   LOG_LEVEL: INFO
@@ -30,9 +31,9 @@ metadata:
   namespace: refracto-ai
 type: Opaque
 data:
-  jwt-secret: <base64-encoded-jwt-secret>
-  db-password: <base64-encoded-db-password>
-  encryption-key: <base64-encoded-encryption-key>
+  jwt-secret: REPLACE_WITH_BASE64_JWT_SECRET
+  db-password: REPLACE_WITH_BASE64_DB_PASSWORD
+  encryption-key: REPLACE_WITH_BASE64_ENCRYPTION_KEY
 
 ---
 # Persistent Volume for models
@@ -142,6 +143,11 @@ spec:
             configMapKeyRef:
               name: ml-service-config
               key: MODEL_PATH
+        - name: OCT_CHECKPOINT_PATH
+          valueFrom:
+            configMapKeyRef:
+              name: ml-service-config
+              key: OCT_CHECKPOINT_PATH
         - name: BATCH_SIZE
           valueFrom:
             configMapKeyRef:

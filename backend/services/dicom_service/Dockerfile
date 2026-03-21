@@ -27,6 +27,10 @@ RUN pip install --upgrade pip && \
 # Copy application code
 COPY . .
 
+# Run as non-root user in containers
+RUN useradd --create-home --uid 10001 appuser && chown -R appuser:appuser /app /tmp/dicom_received
+USER appuser
+
 # Expose DICOM port
 EXPOSE 11112
 

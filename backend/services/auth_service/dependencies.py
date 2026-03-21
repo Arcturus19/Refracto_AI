@@ -2,20 +2,28 @@
 Authentication Dependencies for Protected Routes
 """
 
-from fastapi import Depends, HTTPException, status
-from fastapi.security import OAuth2PasswordBearer
+from fastapi import Depends, HTTPException, Request, status
 from sqlalchemy.orm import Session
 from database import get_db
-from models import User
+from models import User, UserRole
 from security import decode_access_token
-from schemas import TokenData
 
-# OAuth2 scheme for token extraction from Authorization header
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="login")
+
+def _extract_token(request: Request) -> str | None:
+    auth_header = request.headers.get("Authorization", "")
+    scheme, _, token = auth_header.partition(" ")
+    if scheme.lower() == "bearer" and token:
+        return token.strip()
+
+    cookie_token = request.cookies.get("access_token")
+    if cookie_token:
+        return cookie_token
+
+    return None
 
 
 async def get_current_user(
-    token: str = Depends(oauth2_scheme),
+    request: Request,
     db: Session = Depends(get_db)
 ) -> User:
     """
@@ -39,6 +47,10 @@ async def get_current_user(
     )
     
     # Decode the token
+    token = _extract_token(request)
+    if not token:
+        raise credentials_exception
+
     payload = decode_access_token(token)
     if payload is None:
         raise credentials_exception
@@ -71,7 +83,7 @@ async def get_current_active_admin(
     Raises:
         HTTPException: If user is not an admin
     """
-    if current_user.role != "admin":
+    if current_user.role != UserRole.ADMIN:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Insufficient permissions. Admin access required."

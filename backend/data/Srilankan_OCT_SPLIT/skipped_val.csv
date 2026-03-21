@@ -1,0 +1,10 @@
+sample_id,reason
+E024,no_decodable_dicom
+E456,no_decodable_dicom
+E462,no_decodable_dicom
+E612,no_decodable_dicom
+E652,no_decodable_dicom
+E701,no_decodable_dicom
+E727,no_decodable_dicom
+E814,no_decodable_dicom
+E816,no_decodable_dicom

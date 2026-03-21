@@ -1,5 +1,5 @@
 # Use official Python runtime as base image
-FROM python:3.9-slim
+FROM python:3.11-slim
 
 # Set working directory in container
 WORKDIR /app
@@ -36,6 +36,10 @@ RUN pip install --upgrade pip && \
 
 # Copy application code
 COPY . .
+
+# Run as non-root user in containers
+RUN useradd --create-home --uid 10001 appuser && chown -R appuser:appuser /app
+USER appuser
 
 # Expose port
 EXPOSE 8000

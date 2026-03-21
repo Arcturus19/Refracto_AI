@@ -14,6 +14,9 @@ python-dotenv==1.0.0
 # Date utilities
 python-dateutil==2.8.2
 
+# Authentication
+python-jose[cryptography]==3.3.0
+
 # Object Storage
 minio==7.2.3
 

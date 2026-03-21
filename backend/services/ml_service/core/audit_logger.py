@@ -76,7 +76,8 @@ class AuditLogger:
         Returns:
             log_id (UUID string) for this prediction
         """
-        log_id = str(uuid.uuid4())
+        # Public-facing IDs are expected to be prefixed for easy identification.
+        log_id = f"LOG_{uuid.uuid4().hex}"
         
         log = PredictionAuditLog(
             log_id=log_id,

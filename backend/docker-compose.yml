@@ -7,17 +7,15 @@ services:
     container_name: refracto_postgres
     restart: always
     environment:
-      POSTGRES_USER: ${POSTGRES_USER}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
-      POSTGRES_DB: ${POSTGRES_DB}
-    ports:
-      - "5432:5432"
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      POSTGRES_DB: ${POSTGRES_DB:-refracto}
     volumes:
-      - postgres_data:/var/lib/postgresql/data
+      - postgres_data_dev:/var/lib/postgresql/data
     networks:
       - refracto_network
     healthcheck:
-      test: [ "CMD-SHELL", "pg_isready -U ${POSTGRES_USER}" ]
+      test: [ "CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-refracto}" ]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -28,10 +26,8 @@ services:
     container_name: refracto_pgadmin
     restart: always
     environment:
-      PGADMIN_DEFAULT_EMAIL: ${PGADMIN_DEFAULT_EMAIL}
-      PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_DEFAULT_PASSWORD}
-    ports:
-      - "5050:80"
+      PGADMIN_DEFAULT_EMAIL: ${PGADMIN_DEFAULT_EMAIL:-admin@local.dev}
+      PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_DEFAULT_PASSWORD:-admin}
     volumes:
       - pgadmin_data:/var/lib/pgadmin
     networks:
@@ -47,14 +43,25 @@ services:
     container_name: refracto_auth_service
     restart: always
     environment:
-      DATABASE_URL: ${DATABASE_URL}
-      SECRET_KEY: ${SECRET_KEY}
-      ALGORITHM: ${ALGORITHM}
-      ACCESS_TOKEN_EXPIRE_MINUTES: ${ACCESS_TOKEN_EXPIRE_MINUTES}
+      DATABASE_URL: ${DATABASE_URL:-postgresql+psycopg2://postgres:postgres@postgres:5432/refracto}
+      SECRET_KEY: ${SECRET_KEY:-dev_secret_key_change_me}
+      ALGORITHM: ${ALGORITHM:-HS256}
+      ACCESS_TOKEN_EXPIRE_MINUTES: ${ACCESS_TOKEN_EXPIRE_MINUTES:-30}
+      ACCESS_COOKIE_NAME: ${ACCESS_COOKIE_NAME:-access_token}
+      COOKIE_SECURE: ${COOKIE_SECURE:-false}
+      COOKIE_SAMESITE: ${COOKIE_SAMESITE:-lax}
+      COOKIE_DOMAIN: ${COOKIE_DOMAIN:-}
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:5173}
     ports:
       - "8001:8000"
     networks:
       - refracto_network
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
     depends_on:
       postgres:
         condition: service_healthy
@@ -67,11 +74,22 @@ services:
     container_name: refracto_patient_service
     restart: always
     environment:
-      DATABASE_URL: ${DATABASE_URL}
+      DATABASE_URL: ${DATABASE_URL:-postgresql+psycopg2://postgres:postgres@postgres:5432/refracto}
+      SECRET_KEY: ${SECRET_KEY:-dev_secret_key_change_me}
+      ALGORITHM: ${ALGORITHM:-HS256}
+      ACCESS_COOKIE_NAME: ${ACCESS_COOKIE_NAME:-access_token}
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:5173}
+      INTERNAL_API_TOKEN: ${INTERNAL_API_TOKEN:-dev_internal_token_change_me}
     ports:
       - "8002:8000"
     networks:
       - refracto_network
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
     depends_on:
       postgres:
         condition: service_healthy
@@ -83,11 +101,8 @@ services:
     restart: always
     command: server /data --console-address ":9001"
     environment:
-      MINIO_ROOT_USER: admin
-      MINIO_ROOT_PASSWORD: password123
-    ports:
-      - "9000:9000" # API
-      - "9001:9001" # Console UI
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin}
     volumes:
       - ./minio_data:/data
     networks:
@@ -106,15 +121,28 @@ services:
     container_name: refracto_imaging_service
     restart: always
     environment:
-      DATABASE_URL: ${DATABASE_URL}
+      DATABASE_URL: ${DATABASE_URL:-postgresql+psycopg2://postgres:postgres@postgres:5432/refracto}
+      SECRET_KEY: ${SECRET_KEY:-dev_secret_key_change_me}
+      ALGORITHM: ${ALGORITHM:-HS256}
+      ACCESS_COOKIE_NAME: ${ACCESS_COOKIE_NAME:-access_token}
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:5173}
+      INTERNAL_API_TOKEN: ${INTERNAL_API_TOKEN:-dev_internal_token_change_me}
+      PATIENT_SERVICE_URL: ${PATIENT_SERVICE_URL:-http://patient_service:8000}
+      ACCESS_ENFORCEMENT_MODE: ${ACCESS_ENFORCEMENT_MODE:-required}
       MINIO_ENDPOINT: minio:9000
-      MINIO_ROOT_USER: admin
-      MINIO_ROOT_PASSWORD: password123
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin}
       MINIO_SECURE: "false"
     ports:
       - "8003:8000"
     networks:
       - refracto_network
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
     depends_on:
       postgres:
         condition: service_healthy
@@ -131,6 +159,16 @@ services:
     environment:
       MODEL_PATH: /app/models
       DEVICE: cpu # Change to 'cuda' if GPU available
+      SECRET_KEY: ${SECRET_KEY:-dev_secret_key_change_me}
+      ALGORITHM: ${ALGORITHM:-HS256}
+      ACCESS_COOKIE_NAME: ${ACCESS_COOKIE_NAME:-access_token}
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:5173}
+      INTERNAL_API_TOKEN: ${INTERNAL_API_TOKEN:-dev_internal_token_change_me}
+      PATIENT_SERVICE_URL: ${PATIENT_SERVICE_URL:-http://patient_service:8000}
+      CONSENT_ENFORCEMENT_MODE: ${CONSENT_ENFORCEMENT_MODE:-if_patient_provided}
+      CONSENT_TYPE: ${CONSENT_TYPE:-ml_analysis}
+      AUDIT_LOG_PATH: ${AUDIT_LOG_PATH:-/data/audit/ml_predictions_audit.jsonl}
+      AUDIT_HASH_SALT: ${AUDIT_HASH_SALT:-change_me_audit_salt}
     ports:
       - "8004:8000"
     volumes:
@@ -138,6 +176,12 @@ services:
       - ./data:/data # Mount data directory for training datasets
     networks:
       - refracto_network
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 60s
+      timeout: 20s
+      retries: 3
+      start_period: 10m
     # Note: ML service can run independently, no service dependencies
 
     # DICOM Service (Background Worker)
@@ -151,8 +195,9 @@ services:
       PATIENT_SERVICE_URL: http://patient_service:8000
       IMAGING_SERVICE_URL: http://imaging_service:8000
       AUTO_INGEST: "true"
-      AUTO_CREATE_PATIENTS: "true"
+      AUTO_CREATE_PATIENTS: "false"
       DELETE_AFTER_UPLOAD: "true"
+      INTERNAL_API_TOKEN: ${INTERNAL_API_TOKEN:-dev_internal_token_change_me}
     ports:
       - "11112:11112" # DICOM C-STORE port
     volumes:
@@ -160,12 +205,16 @@ services:
     networks:
       - refracto_network
     depends_on:
-      - patient_service
-      - imaging_service
+      patient_service:
+        condition: service_healthy
+      imaging_service:
+        condition: service_healthy
     # Note: DICOM service runs independently as background worker
 
 volumes:
   postgres_data:
+    driver: local
+  postgres_data_dev:
     driver: local
   pgadmin_data:
     driver: local

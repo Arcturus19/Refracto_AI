@@ -88,6 +88,8 @@ class RefractoModels:
             self.oct_model: Optional[nn.Module] = None
             self.refraction_backbone: Optional[nn.Module] = None
             self.refraction_head: Optional[RefractionHead] = None
+            self.oct_checkpoint_path: Optional[str] = None
+            self.oct_model_source: str = "unknown"
             
             # Hybrid Fusion + MTL Models
             self.fusion: Optional[MultiHeadFusion] = None
@@ -105,6 +107,12 @@ class RefractoModels:
                 2: "Moderate DR",
                 3: "Severe DR",
                 4: "Proliferative DR"
+            }
+            self.oct_classes = {
+                0: "CNV",
+                1: "DME",
+                2: "DRUSEN",
+                3: "NORMAL"
             }
     
     def load_models(self) -> bool:
@@ -167,28 +175,76 @@ class RefractoModels:
     
     def _load_oct_model(self):
         """Load Vision Transformer for OCT image analysis"""
-        logger.info("🔬 Loading OCT Model (Vision Transformer)...")
+        logger.info("🔬 Loading OCT Model...")
         
         try:
-            # Load pre-trained ViT model
+            checkpoint_candidates = []
+
+            if settings.OCT_CHECKPOINT_PATH:
+                checkpoint_candidates.append(settings.OCT_CHECKPOINT_PATH)
+
+            checkpoint_candidates.extend([
+                os.path.join(settings.MODEL_PATH, "oct_best.pt"),
+                os.path.abspath(
+                    os.path.join(
+                        os.path.dirname(__file__),
+                        "..",
+                        "..",
+                        "..",
+                        "models",
+                        "oct_baseline_cpu",
+                        "oct_best.pt",
+                    )
+                ),
+            ])
+
+            selected_checkpoint = next((path for path in checkpoint_candidates if path and os.path.exists(path)), None)
+
+            if selected_checkpoint:
+                checkpoint = torch.load(selected_checkpoint, map_location=self.device)
+                model_name = checkpoint.get("model_name", settings.OCT_MODEL_NAME)
+                num_classes = int(checkpoint.get("num_classes", 4))
+
+                self.oct_model = timm.create_model(model_name, pretrained=False, num_classes=num_classes)
+                self.oct_model.load_state_dict(checkpoint["state_dict"], strict=True)
+
+                classes = checkpoint.get("classes")
+                if isinstance(classes, list) and classes:
+                    self.oct_classes = {idx: class_name for idx, class_name in enumerate(classes)}
+
+                self.vit_processor = None
+                self.oct_model = self.oct_model.to(self.device)
+                self.oct_model.eval()
+                self.oct_checkpoint_path = selected_checkpoint
+                self.oct_model_source = "checkpoint"
+
+                logger.info(f"   ✓ OCT checkpoint loaded from {selected_checkpoint}")
+                logger.info(f"   ✓ Backbone: {model_name} | classes: {self.oct_classes}")
+                return
+
+            # Fallback model for environments without a trained checkpoint
+            logger.warning("   ⚠️ No trained OCT checkpoint found. Falling back to pretrained ViT with 3 labels.")
             model_name = "google/vit-base-patch16-224"
-            
-            # Load the model
+
             self.oct_model = ViTForImageClassification.from_pretrained(
                 model_name,
-                num_labels=3,  # Can be fine-tuned for specific OCT classifications
+                num_labels=3,
                 ignore_mismatched_sizes=True
             )
-            
-            # Load the image processor
             self.vit_processor = ViTImageProcessor.from_pretrained(model_name)
-            
-            # Move to device and set to evaluation mode
             self.oct_model = self.oct_model.to(self.device)
             self.oct_model.eval()
-            
+            self.oct_checkpoint_path = None
+            self.oct_model_source = "fallback_vit"
+
+            self.oct_classes = {
+                0: "Normal",
+                1: "DME",
+                2: "AMD"
+            }
+
             logger.info(f"   ✓ Vision Transformer loaded from {model_name}")
-            logger.info(f"   ✓ Image processor loaded")
+            logger.info("   ✓ Image processor loaded")
             
         except Exception as e:
             logger.error(f"   ✗ Failed to load OCT model: {str(e)}")
@@ -390,31 +446,25 @@ class RefractoModels:
         Returns:
             Dictionary with OCT predictions
         """
-        # Forward pass
-        outputs = self.oct_model(image_tensor)
-        logits = outputs.logits
-        probabilities = torch.softmax(logits, dim=1)
+        # Inference-only path for stable tensor-to-float conversion.
+        with torch.no_grad():
+            outputs = self.oct_model(image_tensor)
+            logits = outputs.logits if hasattr(outputs, 'logits') else outputs
+            probabilities = torch.softmax(logits, dim=1).detach()
         
         # Get prediction
         pred_class = torch.argmax(probabilities, dim=1).item()
         confidence = probabilities[0, pred_class].item()
         
-        # OCT class mapping (can be customized)
-        oct_classes = {
-            0: "Normal",
-            1: "DME",  # Diabetic Macular Edema
-            2: "AMD"   # Age-related Macular Degeneration
-        }
-        
         return {
             "task": "oct",
             "prediction": {
-                "class": oct_classes.get(pred_class, f"Class {pred_class}"),
+                "class": self.oct_classes.get(pred_class, f"Class {pred_class}"),
                 "class_id": int(pred_class),
                 "confidence": float(confidence)
             },
             "probabilities": {
-                oct_classes.get(i, f"Class {i}"): float(probabilities[0, i])
+                self.oct_classes.get(i, f"Class {i}"): float(probabilities[0, i])
                 for i in range(probabilities.shape[1])
             }
         }
@@ -467,8 +517,11 @@ class RefractoModels:
                     "loaded": self.fundus_model is not None
                 },
                 "oct": {
-                    "name": "Vision Transformer (ViT)",
+                    "name": "OCT Classifier",
                     "task": "OCT Analysis",
+                    "classes": list(self.oct_classes.values()),
+                    "source": self.oct_model_source,
+                    "checkpoint_path": self.oct_checkpoint_path,
                     "loaded": self.oct_model is not None
                 },
                 "refraction": {

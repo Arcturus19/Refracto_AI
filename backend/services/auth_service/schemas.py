@@ -15,13 +15,29 @@ class UserCreate(BaseModel):
     email: EmailStr
     password: str = Field(..., min_length=8, description="Password must be at least 8 characters")
     full_name: str = Field(..., min_length=1, max_length=255)
-    role: UserRole = UserRole.DOCTOR
 
 
 class UserLogin(BaseModel):
     """Schema for user login"""
     email: EmailStr
     password: str
+
+
+class UserProfileUpdate(BaseModel):
+    """Schema for updating current user's profile"""
+    full_name: str = Field(..., min_length=1, max_length=255)
+    email: EmailStr
+
+
+class PasswordChangeRequest(BaseModel):
+    """Schema for changing current user's password"""
+    current_password: str
+    new_password: str = Field(..., min_length=8, description="Password must be at least 8 characters")
+
+
+class UserSettingsPayload(BaseModel):
+    """Flexible schema for user settings payload"""
+    settings: dict
 
 
 # ============ Response Schemas ============
@@ -56,3 +72,8 @@ class LoginResponse(BaseModel):
     user: UserResponse
     access_token: str
     token_type: str = "bearer"
+
+
+class MessageResponse(BaseModel):
+    """Generic success message response"""
+    message: str

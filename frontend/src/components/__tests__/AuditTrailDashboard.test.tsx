@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { AuditTrailDashboard } from '../AuditTrailDashboard';
 import { mockApiResponses, mockFetchSuccess, resetAllMocks } from '../../tests/setup';
@@ -38,10 +38,13 @@ describe('AuditTrailDashboard Component', () => {
     mockFetchSuccess(mockApiResponses.auditLogs);
     
     render(<AuditTrailDashboard />);
-    
-    await waitFor(() => {
-      expect(screen.getByText(/locked|immutable|read-only/i)).toBeInTheDocument();
-    });
+
+    const detailsBtn = await screen.findByRole('button', { name: 'Details' });
+    fireEvent.click(detailsBtn);
+
+    expect(
+      await screen.findByText('This record is immutable and cannot be modified after creation.')
+    ).toBeInTheDocument();
   });
 
   it('displays task type for each log entry', async () => {
@@ -80,22 +83,22 @@ describe('AuditTrailDashboard Component', () => {
     render(<AuditTrailDashboard />);
     
     await waitFor(() => {
-      expect(screen.getByText(/timestamp|time|date|\d{4}-\d{2}/)).toBeInTheDocument();
+      expect(screen.getByText(/\d{1,2}\/\d{1,2}\/\d{4}/)).toBeInTheDocument();
     });
   });
 
   it('allows filtering by task type', async () => {
     const user = userEvent.setup();
+    // initial load + refetch after filter
+    mockFetchSuccess(mockApiResponses.auditLogs);
     mockFetchSuccess(mockApiResponses.auditLogs);
     
     render(<AuditTrailDashboard />);
-    
-    await waitFor(() => {
-      const filterBtn = screen.getByRole('button', { name: /filter|task/i });
-      expect(filterBtn).toBeInTheDocument();
-    });
-    
-    const drFilter = screen.getByRole('button', { name: /^DR$/i });
+
+    // Wait for initial fetch to complete
+    await screen.findByText(/LOG_TEST_001/i);
+
+    const drFilter = screen.getByRole('button', { name: 'DR' });
     await user.click(drFilter);
     
     await waitFor(() => {
@@ -110,35 +113,54 @@ describe('AuditTrailDashboard Component', () => {
     mockFetchSuccess(mockApiResponses.auditLogs);
     
     render(<AuditTrailDashboard />);
-    
-    await waitFor(() => {
-      const logsPanel = screen.getByText(/LOG_TEST_001/);
-      fireEvent.click(logsPanel);
-    });
-    
-    await waitFor(() => {
-      expect(screen.getByText(/clinician.*feedback|feedback|comments/i)).toBeInTheDocument();
-    });
+
+    const detailsBtn = await screen.findByRole('button', { name: 'Details' });
+    fireEvent.click(detailsBtn);
+
+    expect(await screen.findByText('Prediction Details')).toBeInTheDocument();
+    expect(screen.getByText('Log ID')).toBeInTheDocument();
   });
 
   it('shows clinician feedback when available', async () => {
-    mockFetchSuccess(mockApiResponses.auditLogs);
+    const logsWithClinicianFeedback = {
+      logs: [
+        {
+          ...mockApiResponses.auditLogs.logs[0],
+          model_version: 'v1.0.0',
+          consent_verified: true,
+          ethics_approval_id: 'ETHICS_TEST_001',
+          clinician_feedback: {
+            clinician_id: 'DR_001',
+            clinician_agreement: 4,
+            clinician_feedback: 'Good prediction',
+            feedback_timestamp: new Date().toISOString(),
+          },
+        },
+      ],
+      count: 1,
+    };
+
+    mockFetchSuccess(logsWithClinicianFeedback);
     
     render(<AuditTrailDashboard />);
-    
-    await waitFor(() => {
-      const expandBtn = screen.getByRole('button', { name: /expand|details|more/i });
-      fireEvent.click(expandBtn);
-    });
-    
-    await waitFor(() => {
-      expect(screen.getByText(/Good prediction|feedback/i)).toBeInTheDocument();
-    });
+
+    const detailsBtn = await screen.findByRole('button', { name: 'Details' });
+    fireEvent.click(detailsBtn);
+
+    expect(await screen.findByText(/Clinician feedback:/i)).toBeInTheDocument();
+    expect(screen.getByText(/Good prediction/i)).toBeInTheDocument();
   });
 
   it('allows exporting logs for compliance', async () => {
     const user = userEvent.setup();
     mockFetchSuccess(mockApiResponses.auditLogs);
+
+    const createObjectURLSpy = vi.fn(() => 'blob:mock');
+    Object.defineProperty(global.URL, 'createObjectURL', {
+      value: createObjectURLSpy,
+      writable: true,
+    });
+
     (global.fetch as any).mockResolvedValueOnce({
       ok: true,
       blob: async () => new Blob(['csv data']),
@@ -160,14 +182,16 @@ describe('AuditTrailDashboard Component', () => {
   });
 
   it('ensures no PII in exported data', async () => {
-    const user = userEvent.setup();
     mockFetchSuccess(mockApiResponses.auditLogs);
     
     render(<AuditTrailDashboard showPIIWarning={true} />);
-    
-    await waitFor(() => {
-      expect(screen.getByText(/anonymized|no.*pii|privacy/i)).toBeInTheDocument();
-    });
+
+    // Wait for initial async fetch + state update to settle
+    await screen.findByText(/LOG_TEST_001/i);
+
+    expect(
+      screen.getByText('All data shown is anonymized — no PII is stored or displayed.')
+    ).toBeInTheDocument();
   });
 
   it('displays anonymized patient IDs only', async () => {
@@ -182,20 +206,25 @@ describe('AuditTrailDashboard Component', () => {
 
   it('shows pagination controls', async () => {
     const multipleLogsResponse = {
-      logs: Array(25).fill(mockApiResponses.auditLogs.logs[0]),
+      logs: Array.from({ length: 25 }, (_, idx) => ({
+        ...mockApiResponses.auditLogs.logs[0],
+        log_id: `LOG_TEST_${String(idx + 1).padStart(3, '0')}`,
+      })),
       count: 25,
     };
     mockFetchSuccess(multipleLogsResponse);
     
     render(<AuditTrailDashboard itemsPerPage={10} />);
-    
-    await waitFor(() => {
-      expect(screen.getByText(/previous|next|page|1 of/i)).toBeInTheDocument();
-    });
+
+    expect(await screen.findByRole('button', { name: 'Previous' })).toBeDisabled();
+    expect(screen.getByText('Page 1 of 3')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Next' })).toBeEnabled();
   });
 
   it('allows searching logs by patient or date', async () => {
     const user = userEvent.setup();
+    // initial load + refetch after search
+    mockFetchSuccess(mockApiResponses.auditLogs);
     mockFetchSuccess(mockApiResponses.auditLogs);
     
     render(<AuditTrailDashboard />);
@@ -217,8 +246,7 @@ describe('AuditTrailDashboard Component', () => {
     render(<AuditTrailDashboard />);
     
     await waitFor(() => {
-      const logEntry = screen.getByText(/2026/);
-      expect(logEntry).toBeInTheDocument();
+      expect(screen.getByText(/\d{1,2}\/\d{1,2}\/\d{4}/)).toBeInTheDocument();
     });
   });
 
@@ -226,10 +254,10 @@ describe('AuditTrailDashboard Component', () => {
     mockFetchSuccess(mockApiResponses.auditLogs);
     
     render(<AuditTrailDashboard />);
-    
-    await waitFor(() => {
-      expect(screen.getByText(/csv|json|export.*format/i)).toBeInTheDocument();
-    });
+
+    const select = await screen.findByRole('combobox');
+    expect(within(select).getByRole('option', { name: 'CSV' })).toBeInTheDocument();
+    expect(within(select).getByRole('option', { name: 'JSON' })).toBeInTheDocument();
   });
 
   it('handles loading state', async () => {
